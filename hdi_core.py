@@ -2,21 +2,34 @@ from flask import Flask, jsonify
 
 app = Flask(__name__)
 
-@app.route("/hdi/country-opportunity/<country>")
-def country_opportunity(country):
-    scores = {
-        "Tanzania": 7.4,
-        "Kenya": 7.6,
-        "India": 8.5
-    }
+# HDI country opportunity scores
+COUNTRY_OPPORTUNITIES = {
+    "Tanzania": 7.4,
+    "Kenya": 8.1,
+    "Uganda": 7.8,
+    "Nigeria": 8.5,
+    "South Africa": 8.0,
+    "Ghana": 7.9,
+    "Rwanda": 8.2,
+    "Ethiopia": 7.7,
+    "Zambia": 7.6
+}
 
-    score = scores.get(country)
+@app.route("/")
+def home():
+    return "HDI Global API is live"
+
+@app.route("/hdi/country-opportunity/<country_name>")
+def country_opportunity(country_name):
+    score = COUNTRY_OPPORTUNITIES.get(country_name)
 
     if score is None:
-        return jsonify({"error": "Country not found"}), 404
+        return jsonify({
+            "error": "Country not found"
+        }), 404
 
     return jsonify({
-        "country": country,
+        "country": country_name,
         "opportunity_score": score
     })
 
