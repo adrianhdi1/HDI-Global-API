@@ -4,7 +4,7 @@ import random
 app = Flask(__name__)
 
 # ---------------------------
-# Base Country Opportunity Scores
+# Base country scores & sectors
 # ---------------------------
 COUNTRY_OPPORTUNITIES = {
     "Tanzania": 7.4,
@@ -18,9 +18,6 @@ COUNTRY_OPPORTUNITIES = {
     "Zambia": 7.6
 }
 
-# ---------------------------
-# Sector Data
-# ---------------------------
 COUNTRY_SECTORS = {
     "Tanzania": {"best_sector": "Agriculture", "profit_level": "Very High"},
     "Kenya": {"best_sector": "Technology", "profit_level": "High"},
@@ -38,22 +35,17 @@ COUNTRY_SECTORS = {
 # ---------------------------
 @app.route("/")
 def home():
-    return "HDI Global API is live with dynamic scoring!"
+    return "HDI Global API is live with AI prediction engine!"
 
 # ---------------------------
 # Dynamic scoring function
 # ---------------------------
 def dynamic_score(base_score):
-    """
-    Adds variability to the base score to simulate dynamic real-time opportunities.
-    Factors can later be linked to real economic data (GDP, investments, startup activity, etc.)
-    """
-    # Random small adjustment for demo purposes
     adjustment = random.uniform(-0.3, 0.3)
     return round(base_score + adjustment, 2)
 
 # ---------------------------
-# Country opportunity with dynamic score
+# Country opportunity
 # ---------------------------
 @app.route("/hdi/country-opportunity/<country_name>")
 def country_opportunity(country_name):
@@ -64,7 +56,7 @@ def country_opportunity(country_name):
     return jsonify({"country": country_name, "opportunity_score": score})
 
 # ---------------------------
-# Top 10 countries (dynamic)
+# Top 10 countries
 # ---------------------------
 @app.route("/hdi/top-opportunities")
 def top_opportunities():
@@ -74,7 +66,7 @@ def top_opportunities():
     return jsonify({"top_opportunities": top_10})
 
 # ---------------------------
-# Sector opportunities
+# Sector opportunity
 # ---------------------------
 @app.route("/hdi/sector-opportunity/<country_name>")
 def sector_opportunity(country_name):
@@ -84,6 +76,30 @@ def sector_opportunity(country_name):
     return jsonify({
         "country": country_name,
         "best_sector": sector_info["best_sector"],
+        "profit_level": sector_info["profit_level"]
+    })
+
+# ---------------------------
+# ---------------------------
+# AI Prediction: “Next Millionaire Opportunity”
+# ---------------------------
+@app.route("/hdi/ai-prediction/<country_name>")
+def ai_prediction(country_name):
+    base_score = COUNTRY_OPPORTUNITIES.get(country_name)
+    sector_info = COUNTRY_SECTORS.get(country_name)
+
+    if not base_score or not sector_info:
+        return jsonify({"error": "Country not found"}), 404
+
+    # Simulate AI prediction: combine dynamic score + sector growth trend
+    predicted_score = round(dynamic_score(base_score) + random.uniform(0.1, 0.5), 2)
+    confidence = random.randint(85, 99)  # prediction confidence %
+
+    return jsonify({
+        "country": country_name,
+        "best_sector": sector_info["best_sector"],
+        "predicted_opportunity_score": predicted_score,
+        "confidence_percent": confidence,
         "profit_level": sector_info["profit_level"]
     })
 
