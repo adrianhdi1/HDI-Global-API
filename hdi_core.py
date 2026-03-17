@@ -1,9 +1,10 @@
 from flask import Flask, jsonify
+import random
 
 app = Flask(__name__)
 
 # ---------------------------
-# Country Opportunity Scores
+# Base Country Opportunity Scores
 # ---------------------------
 COUNTRY_OPPORTUNITIES = {
     "Tanzania": 7.4,
@@ -18,7 +19,7 @@ COUNTRY_OPPORTUNITIES = {
 }
 
 # ---------------------------
-# Country Sector Data
+# Sector Data
 # ---------------------------
 COUNTRY_SECTORS = {
     "Tanzania": {"best_sector": "Agriculture", "profit_level": "Very High"},
@@ -33,37 +34,47 @@ COUNTRY_SECTORS = {
 }
 
 # ---------------------------
-# Home route
+# Home
 # ---------------------------
 @app.route("/")
 def home():
-    return "HDI Global API is live"
+    return "HDI Global API is live with dynamic scoring!"
 
 # ---------------------------
-# Single country opportunity
+# Dynamic scoring function
+# ---------------------------
+def dynamic_score(base_score):
+    """
+    Adds variability to the base score to simulate dynamic real-time opportunities.
+    Factors can later be linked to real economic data (GDP, investments, startup activity, etc.)
+    """
+    # Random small adjustment for demo purposes
+    adjustment = random.uniform(-0.3, 0.3)
+    return round(base_score + adjustment, 2)
+
+# ---------------------------
+# Country opportunity with dynamic score
 # ---------------------------
 @app.route("/hdi/country-opportunity/<country_name>")
 def country_opportunity(country_name):
-    score = COUNTRY_OPPORTUNITIES.get(country_name)
-    if score is None:
+    base = COUNTRY_OPPORTUNITIES.get(country_name)
+    if base is None:
         return jsonify({"error": "Country not found"}), 404
+    score = dynamic_score(base)
     return jsonify({"country": country_name, "opportunity_score": score})
 
 # ---------------------------
-# Top 10 countries by opportunity
+# Top 10 countries (dynamic)
 # ---------------------------
 @app.route("/hdi/top-opportunities")
 def top_opportunities():
-    sorted_countries = sorted(
-        COUNTRY_OPPORTUNITIES.items(),
-        key=lambda x: x[1],
-        reverse=True
-    )
-    top_10 = [{"country": country, "score": score} for country, score in sorted_countries[:10]]
+    dynamic_scores = {c: dynamic_score(s) for c, s in COUNTRY_OPPORTUNITIES.items()}
+    sorted_countries = sorted(dynamic_scores.items(), key=lambda x: x[1], reverse=True)
+    top_10 = [{"country": c, "score": s} for c, s in sorted_countries[:10]]
     return jsonify({"top_opportunities": top_10})
 
 # ---------------------------
-# Sector opportunity per country
+# Sector opportunities
 # ---------------------------
 @app.route("/hdi/sector-opportunity/<country_name>")
 def sector_opportunity(country_name):
@@ -75,13 +86,6 @@ def sector_opportunity(country_name):
         "best_sector": sector_info["best_sector"],
         "profit_level": sector_info["profit_level"]
     })
-
-# ---------------------------
-# Optional dynamic scoring function (future AI upgrade)
-# ---------------------------
-def calculate_score(base_score):
-    # Placeholder: can add AI-based adjustments here later
-    return round(base_score, 2)
 
 # ---------------------------
 # Run Flask
