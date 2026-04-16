@@ -112,18 +112,24 @@ def alerts():
 # Run
 # ---------------------------
 # ---------------------------
-# 🔒 Premium Alerts System
+# 🔒 Premium Alerts System (Multi-user)
 # ---------------------------
 @app.route("/hdi/premium-alerts")
 def premium_alerts():
     from flask import request
     
     api_key = request.args.get("key")
-    PREMIUM_KEY = "HDI-PRO-123"
 
-    if api_key != PREMIUM_KEY:
+    # Multiple valid users
+    VALID_KEYS = [
+        "HDI-PRO-123",
+        "HDI-USER-456",
+        "HDI-ELITE-789"
+    ]
+
+    if api_key not in VALID_KEYS:
         return jsonify({
-            "error": "Upgrade to premium to access this endpoint"
+            "error": "Invalid or missing API key. Upgrade to premium."
         }), 403
 
     country = random.choice(list(COUNTRY_OPPORTUNITIES.keys()))
@@ -136,3 +142,4 @@ def premium_alerts():
     })
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
