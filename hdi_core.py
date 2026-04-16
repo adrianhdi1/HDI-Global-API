@@ -1,9 +1,10 @@
 from flask import Flask, jsonify, request
 import random
-import json
-import os
+import sqlite3
+import uuid
 
 app = Flask(__name__)
+DB_FILE = "hdi.db"
 
 # ---------------------------
 # Base Data
@@ -33,32 +34,56 @@ COUNTRY_SECTORS = {
 }
 
 # ---------------------------
-# Storage (API Keys)
+# Database
 # ---------------------------
-KEYS_FILE = "keys.json"
+def get_connection():
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-def load_keys():
-    if not os.path.exists(KEYS_FILE):
-        return []
-    with open(KEYS_FILE, "r") as f:
-        return json.load(f)
+def init_db():
+    conn = get_connection()
+    cur = conn.cursor()
 
-def save_keys(keys):
-    with open(KEYS_FILE, "w") as f:
-        json.dump(keys, f)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            api_key TEXT NOT NULL UNIQUE,
+            plan TEXT NOT NULL DEFAULT 'free'
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+init_db()
 
 # ---------------------------
-# Dynamic scoring
+# Helpers
 # ---------------------------
 def dynamic_score(base_score):
     return round(base_score + random.uniform(-0.3, 0.3), 2)
+
+def generate_api_key():
+    return f"HDI-{uuid.uuid4().hex[:12].upper()}"
+
+def get_user_by_key(api_key):
+    conn = get_connection()
+    user = conn.execute(
+        "SELECT * FROM users WHERE api_key = ?",
+        (api_key,)
+    ).fetchone()
+    conn.close()
+    return user
 
 # ---------------------------
 # Home
 # ---------------------------
 @app.route("/")
 def home():
-    return "HDI Global API FULL SYSTEM LIVE 🚀"
+    return "HDI Global API + Database is LIVE 🚀"
 
 # ---------------------------
 # Country Opportunity
@@ -112,7 +137,7 @@ def ai_prediction(country_name):
     })
 
 # ---------------------------
-# Alerts (Free)
+# Free Alerts
 # ---------------------------
 @app.route("/hdi/alerts")
 def alerts():
@@ -124,45 +149,118 @@ def alerts():
     })
 
 # ---------------------------
-# Generate API Key
+# Create User
 # ---------------------------
-@app.route("/hdi/generate-key")
-def generate_key():
-    keys = load_keys()
+@app.route("/hdi/create-user", methods=["POST"])
+def create_user():
+    data = request.get_json(silent=True) or {}
 
-    new_key = f"HDI-{random.randint(1000,9999)}-{random.randint(1000,9999)}"
-    keys.append(new_key)
+    name = data.get("name")
+    email = data.get("email")
+    plan = data.get("plan", "free")
 
-    save_keys(keys)
+    if not name or not email:
+        return jsonify({"error": "name and email are required"}), 400
+
+    api_key = generate_api_key()
+
+    try:
+        conn = get_connection()
+        conn.execute(
+            "INSERT INTO users (name, email, api_key, plan) VALUES (?, ?, ?, ?)",
+            (name, email, api_key, plan)
+        )
+        conn.commit()
+        conn.close()
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "Email already exists"}), 409
 
     return jsonify({
-        "message": "API key generated",
-        "api_key": new_key
+        "message": "User created successfully",
+        "name": name,
+        "email": email,
+        "plan": plan,
+        "api_key": api_key
+    }), 201
+
+# ---------------------------
+# Get User By API Key
+# ---------------------------
+@app.route("/hdi/user")
+def get_user():
+    api_key = request.args.get("key")
+    if not api_key:
+        return jsonify({"error": "API key is required"}), 400
+
+    user = get_user_by_key(api_key)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    return jsonify({
+        "name": user["name"],
+        "email": user["email"],
+        "plan": user["plan"],
+        "api_key": user["api_key"]
     })
 
 # ---------------------------
-# Premium Alerts
+# Premium Alerts (DB-based)
 # ---------------------------
 @app.route("/hdi/premium-alerts")
 def premium_alerts():
     api_key = request.args.get("key")
-    keys = load_keys()
+    if not api_key:
+        return jsonify({"error": "Missing API key"}), 403
 
-    if api_key not in keys:
-        return jsonify({
-            "error": "Invalid or missing API key"
-        }), 403
+    user = get_user_by_key(api_key)
+    if not user:
+        return jsonify({"error": "Invalid API key"}), 403
+
+    if user["plan"] not in ["premium", "elite"]:
+        return jsonify({"error": "Upgrade to premium"}), 403
 
     country = random.choice(list(COUNTRY_OPPORTUNITIES.keys()))
     sector = COUNTRY_SECTORS[country]["best_sector"]
 
     return jsonify({
+        "user": user["name"],
+        "plan": user["plan"],
         "premium_alert": f"🚨 CRITICAL opportunity in {country} - {sector} sector",
         "access": "GRANTED"
     })
 
 # ---------------------------
-# Run
+# Upgrade User Plan
 # ---------------------------
+@app.route("/hdi/upgrade-plan", methods=["POST"])
+def upgrade_plan():
+    data = request.get_json(silent=True) or {}
+
+    api_key = data.get("api_key")
+    new_plan = data.get("plan")
+
+    if not api_key or not new_plan:
+        return jsonify({"error": "api_key and plan are required"}), 400
+
+    if new_plan not in ["free", "premium", "elite"]:
+        return jsonify({"error": "Invalid plan"}), 400
+
+    conn = get_connection()
+    cur = conn.execute(
+        "UPDATE users SET plan = ? WHERE api_key = ?",
+        (new_plan, api_key)
+    )
+    conn.commit()
+    updated = cur.rowcount
+    conn.close()
+
+    if updated == 0:
+        return jsonify({"error": "User not found"}), 404
+
+    return jsonify({
+        "message": "Plan updated successfully",
+        "new_plan": new_plan
+    })
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
