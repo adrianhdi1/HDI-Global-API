@@ -111,5 +111,28 @@ def alerts():
 # ---------------------------
 # Run
 # ---------------------------
+# ---------------------------
+# 🔒 Premium Alerts System
+# ---------------------------
+@app.route("/hdi/premium-alerts")
+def premium_alerts():
+    from flask import request
+    
+    api_key = request.args.get("key")
+    PREMIUM_KEY = "HDI-PRO-123"
+
+    if api_key != PREMIUM_KEY:
+        return jsonify({
+            "error": "Upgrade to premium to access this endpoint"
+        }), 403
+
+    country = random.choice(list(COUNTRY_OPPORTUNITIES.keys()))
+    sector = COUNTRY_SECTORS[country]["best_sector"]
+
+    return jsonify({
+        "premium_alert": f"🚨 CRITICAL opportunity in {country} - {sector} sector",
+        "level": "ELITE",
+        "access": "GRANTED"
+    })
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
