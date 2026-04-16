@@ -4,7 +4,7 @@ import random
 app = Flask(__name__)
 
 # ---------------------------
-# Base country scores & sectors
+# Base Data
 # ---------------------------
 COUNTRY_OPPORTUNITIES = {
     "Tanzania": 7.4,
@@ -31,80 +31,85 @@ COUNTRY_SECTORS = {
 }
 
 # ---------------------------
+# Dynamic scoring
+# ---------------------------
+def dynamic_score(base_score):
+    return round(base_score + random.uniform(-0.3, 0.3), 2)
+
+# ---------------------------
 # Home
 # ---------------------------
 @app.route("/")
 def home():
-    return "HDI Global API is live with AI prediction engine!"
+    return "HDI Global API with AI + Alerts is LIVE 🚀"
 
 # ---------------------------
-# Dynamic scoring function
-# ---------------------------
-def dynamic_score(base_score):
-    adjustment = random.uniform(-0.3, 0.3)
-    return round(base_score + adjustment, 2)
-
-# ---------------------------
-# Country opportunity
+# Country Opportunity
 # ---------------------------
 @app.route("/hdi/country-opportunity/<country_name>")
 def country_opportunity(country_name):
     base = COUNTRY_OPPORTUNITIES.get(country_name)
     if base is None:
         return jsonify({"error": "Country not found"}), 404
-    score = dynamic_score(base)
-    return jsonify({"country": country_name, "opportunity_score": score})
+
+    return jsonify({
+        "country": country_name,
+        "opportunity_score": dynamic_score(base)
+    })
 
 # ---------------------------
-# Top 10 countries
-# ---------------------------
-@app.route("/hdi/top-opportunities")
-def top_opportunities():
-    dynamic_scores = {c: dynamic_score(s) for c, s in COUNTRY_OPPORTUNITIES.items()}
-    sorted_countries = sorted(dynamic_scores.items(), key=lambda x: x[1], reverse=True)
-    top_10 = [{"country": c, "score": s} for c, s in sorted_countries[:10]]
-    return jsonify({"top_opportunities": top_10})
-
-# ---------------------------
-# Sector opportunity
+# Sector Opportunity
 # ---------------------------
 @app.route("/hdi/sector-opportunity/<country_name>")
 def sector_opportunity(country_name):
-    sector_info = COUNTRY_SECTORS.get(country_name)
-    if sector_info is None:
+    sector = COUNTRY_SECTORS.get(country_name)
+    if sector is None:
         return jsonify({"error": "Country not found"}), 404
+
     return jsonify({
         "country": country_name,
-        "best_sector": sector_info["best_sector"],
-        "profit_level": sector_info["profit_level"]
+        "best_sector": sector["best_sector"],
+        "profit_level": sector["profit_level"]
     })
 
 # ---------------------------
-# ---------------------------
-# AI Prediction: “Next Millionaire Opportunity”
+# AI Prediction
 # ---------------------------
 @app.route("/hdi/ai-prediction/<country_name>")
 def ai_prediction(country_name):
-    base_score = COUNTRY_OPPORTUNITIES.get(country_name)
-    sector_info = COUNTRY_SECTORS.get(country_name)
+    base = COUNTRY_OPPORTUNITIES.get(country_name)
+    sector = COUNTRY_SECTORS.get(country_name)
 
-    if not base_score or not sector_info:
+    if base is None or sector is None:
         return jsonify({"error": "Country not found"}), 404
 
-    # Simulate AI prediction: combine dynamic score + sector growth trend
-    predicted_score = round(dynamic_score(base_score) + random.uniform(0.1, 0.5), 2)
-    confidence = random.randint(85, 99)  # prediction confidence %
+    predicted_score = round(dynamic_score(base) + random.uniform(0.2, 0.6), 2)
+    confidence = random.randint(85, 99)
 
     return jsonify({
         "country": country_name,
-        "best_sector": sector_info["best_sector"],
+        "best_sector": sector["best_sector"],
         "predicted_opportunity_score": predicted_score,
         "confidence_percent": confidence,
-        "profit_level": sector_info["profit_level"]
+        "profit_level": sector["profit_level"]
     })
 
 # ---------------------------
-# Run Flask
+# Alerts System 🚨
+# ---------------------------
+@app.route("/hdi/alerts")
+def alerts():
+    country = random.choice(list(COUNTRY_OPPORTUNITIES.keys()))
+    sector = COUNTRY_SECTORS[country]["best_sector"]
+    urgency = random.choice(["HIGH", "MEDIUM", "CRITICAL"])
+
+    return jsonify({
+        "alert": f"🚨 High opportunity detected in {country} - {sector} sector",
+        "urgency": urgency
+    })
+
+# ---------------------------
+# Run
 # ---------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
