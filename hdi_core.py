@@ -1,5 +1,7 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import random
+import json
+import os
 
 app = Flask(__name__)
 
@@ -31,6 +33,21 @@ COUNTRY_SECTORS = {
 }
 
 # ---------------------------
+# Storage (API Keys)
+# ---------------------------
+KEYS_FILE = "keys.json"
+
+def load_keys():
+    if not os.path.exists(KEYS_FILE):
+        return []
+    with open(KEYS_FILE, "r") as f:
+        return json.load(f)
+
+def save_keys(keys):
+    with open(KEYS_FILE, "w") as f:
+        json.dump(keys, f)
+
+# ---------------------------
 # Dynamic scoring
 # ---------------------------
 def dynamic_score(base_score):
@@ -41,7 +58,7 @@ def dynamic_score(base_score):
 # ---------------------------
 @app.route("/")
 def home():
-    return "HDI Global API with AI + Alerts is LIVE 🚀"
+    return "HDI Global API FULL SYSTEM LIVE 🚀"
 
 # ---------------------------
 # Country Opportunity
@@ -95,41 +112,45 @@ def ai_prediction(country_name):
     })
 
 # ---------------------------
-# Alerts System 🚨
+# Alerts (Free)
 # ---------------------------
 @app.route("/hdi/alerts")
 def alerts():
     country = random.choice(list(COUNTRY_OPPORTUNITIES.keys()))
     sector = COUNTRY_SECTORS[country]["best_sector"]
-    urgency = random.choice(["HIGH", "MEDIUM", "CRITICAL"])
 
     return jsonify({
-        "alert": f"🚨 High opportunity detected in {country} - {sector} sector",
-        "urgency": urgency
+        "alert": f"🚨 Opportunity detected in {country} - {sector} sector"
     })
 
 # ---------------------------
-# Run
+# Generate API Key
 # ---------------------------
+@app.route("/hdi/generate-key")
+def generate_key():
+    keys = load_keys()
+
+    new_key = f"HDI-{random.randint(1000,9999)}-{random.randint(1000,9999)}"
+    keys.append(new_key)
+
+    save_keys(keys)
+
+    return jsonify({
+        "message": "API key generated",
+        "api_key": new_key
+    })
+
 # ---------------------------
-# 🔒 Premium Alerts System (Multi-user)
+# Premium Alerts
 # ---------------------------
 @app.route("/hdi/premium-alerts")
 def premium_alerts():
-    from flask import request
-    
     api_key = request.args.get("key")
+    keys = load_keys()
 
-    # Multiple valid users
-    VALID_KEYS = [
-        "HDI-PRO-123",
-        "HDI-USER-456",
-        "HDI-ELITE-789"
-    ]
-
-    if api_key not in VALID_KEYS:
+    if api_key not in keys:
         return jsonify({
-            "error": "Invalid or missing API key. Upgrade to premium."
+            "error": "Invalid or missing API key"
         }), 403
 
     country = random.choice(list(COUNTRY_OPPORTUNITIES.keys()))
@@ -137,9 +158,11 @@ def premium_alerts():
 
     return jsonify({
         "premium_alert": f"🚨 CRITICAL opportunity in {country} - {sector} sector",
-        "level": "ELITE",
         "access": "GRANTED"
     })
+
+# ---------------------------
+# Run
+# ---------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
-
