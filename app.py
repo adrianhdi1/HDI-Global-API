@@ -5,9 +5,6 @@ import uuid
 app = Flask(__name__)
 DB = "hdi.db"
 
-# ---------------------------
-# Init DB
-# ---------------------------
 def init_db():
     conn = sqlite3.connect(DB)
     conn.execute("""
@@ -23,41 +20,39 @@ def init_db():
 
 init_db()
 
-# ---------------------------
-# Home
-# ---------------------------
 @app.route("/")
 def home():
     return jsonify({"message": "HDI API LIVE 🚀"})
 
-# ---------------------------
-# Create User
-# ---------------------------
 @app.route("/hdi/create-user", methods=["POST"])
 def create_user():
-    data = request.get_json()
+    data = request.get_json() or {}
 
     name = data.get("name")
     email = data.get("email")
 
+    if not name or not email:
+        return jsonify({"error": "name and email are required"}), 400
+
     api_key = "HDI-" + uuid.uuid4().hex[:10].upper()
 
-    conn = sqlite3.connect(DB)
-    conn.execute(
-        "INSERT INTO users (name, email, api_key) VALUES (?, ?, ?)",
-        (name, email, api_key)
-    )
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB)
+        conn.execute(
+            "INSERT INTO users (name, email, api_key) VALUES (?, ?, ?)",
+            (name, email, api_key)
+        )
+        conn.commit()
+        conn.close()
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "Email already exists"}), 409
 
     return jsonify({
         "message": "User created",
-        "api_key": api_key
+        "api_key": api_key,
+        "plan": "free"
     })
 
-# ---------------------------
-# Get User
-# ---------------------------
 @app.route("/hdi/user")
 def get_user():
     key = request.args.get("key")
@@ -78,8 +73,55 @@ def get_user():
         "plan": user[2]
     })
 
-# ---------------------------
-# Run
-# ---------------------------
+@app.route("/hdi/upgrade", methods=["POST"])
+def upgrade():
+    data = request.get_json() or {}
+
+    key = data.get("api_key")
+    plan = data.get("plan", "premium")
+
+    if not key:
+        return jsonify({"error": "api_key is required"}), 400
+
+    conn = sqlite3.connect(DB)
+    cur = conn.execute(
+        "UPDATE users SET plan=? WHERE api_key=?",
+        (plan, key)
+    )
+    conn.commit()
+    updated = cur.rowcount
+    conn.close()
+
+    if updated == 0:
+        return jsonify({"error": "User not found"}), 404
+
+    return jsonify({
+        "message": "User upgraded successfully",
+        "plan": plan
+    })
+
+@app.route("/hdi/premium-alerts")
+def premium_alerts():
+    key = request.args.get("key")
+
+    conn = sqlite3.connect(DB)
+    user = conn.execute(
+        "SELECT name, plan FROM users WHERE api_key=?",
+        (key,)
+    ).fetchone()
+    conn.close()
+
+    if not user:
+        return jsonify({"error": "Invalid API key"}), 403
+
+    if user[1] != "premium":
+        return jsonify({"error": "Upgrade to premium"}), 403
+
+    return jsonify({
+        "user": user[0],
+        "plan": user[1],
+        "alert": "🔥 Premium opportunity unlocked"
+    })
+
 if __name__ == "__main__":
     app.run()
