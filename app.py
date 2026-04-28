@@ -12,9 +12,6 @@ BASE_URL = "https://hdi-global-api.onrender.com"
 PAY_AMOUNT = 10
 PAY_CURRENCY = "USD"
 
-# ---------------------------
-# Init DB
-# ---------------------------
 def init_db():
     conn = sqlite3.connect(DB)
     conn.execute("""
@@ -41,9 +38,6 @@ def init_db():
 
 init_db()
 
-# ---------------------------
-# Helpers
-# ---------------------------
 def get_conn():
     return sqlite3.connect(DB)
 
@@ -56,16 +50,10 @@ def get_user_by_key(api_key):
     conn.close()
     return user
 
-# ---------------------------
-# Home
-# ---------------------------
 @app.route("/")
 def home():
     return jsonify({"message": "HDI API LIVE 🚀"})
 
-# ---------------------------
-# Create User
-# ---------------------------
 @app.route("/hdi/create-user", methods=["POST"])
 def create_user():
     data = request.get_json() or {}
@@ -95,16 +83,15 @@ def create_user():
         "plan": "free"
     })
 
-# ---------------------------
-# Get User
-# ---------------------------
 @app.route("/hdi/user")
 def get_user():
     key = request.args.get("key")
+
     if not key:
         return jsonify({"error": "key is required"}), 400
 
     user = get_user_by_key(key)
+
     if not user:
         return jsonify({"error": "User not found"}), 404
 
@@ -115,38 +102,45 @@ def get_user():
         "api_key": user[3]
     })
 
-# ---------------------------
-# Premium Alerts
-# ---------------------------
 @app.route("/hdi/premium-alerts")
 def premium_alerts():
     key = request.args.get("key")
-    if not key:
-        return jsonify({"error": "Missing API key"}), 403
 
     user = get_user_by_key(key)
-    if not user:
-        return jsonify({"error": "Invalid API key"}), 403
 
-    if user[4] != "premium":
-        return jsonify({"error": "Upgrade to premium"}), 403
+    if not user:
+        return jsonify({
+            "error": "Invalid API key",
+            "upgrade": "Create an HDI account to access intelligence signals"
+        }), 403
+
+    name = user[1]
+    plan = user[4]
+
+    if plan == "free":
+        return jsonify({
+            "message": "🔒 Premium insight locked",
+            "preview": "High-profit opportunity detected...",
+            "upgrade": "Upgrade to PREMIUM to unlock full intelligence"
+        }), 403
 
     return jsonify({
-        "alert": "🔥 Premium opportunity unlocked",
-        "plan": "premium",
-        "user": user[1]
+        "user": name,
+        "plan": plan,
+        "alert": "🔥 Full opportunity: Agriculture export opportunity in East Africa worth $500K+",
+        "confidence": "91%",
+        "urgency": "HIGH"
     })
 
-# ---------------------------
-# Create Payment Link
-# ---------------------------
 @app.route("/hdi/pay")
 def pay():
     api_key = request.args.get("key")
+
     if not api_key:
         return jsonify({"error": "Missing API key"}), 400
 
     user = get_user_by_key(api_key)
+
     if not user:
         return jsonify({"error": "Invalid API key"}), 404
 
@@ -174,7 +168,7 @@ def pay():
         },
         "customizations": {
             "title": "HDI Premium Access",
-            "description": "Unlock premium access for HDI"
+            "description": "Unlock premium HDI intelligence"
         }
     }
 
@@ -204,9 +198,6 @@ def pay():
         "tx_ref": tx_ref
     })
 
-# ---------------------------
-# Verify Payment + Auto Upgrade
-# ---------------------------
 @app.route("/hdi/verify-payment")
 def verify_payment():
     transaction_id = request.args.get("transaction_id")
