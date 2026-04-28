@@ -120,8 +120,15 @@ def premium_alerts():
     if plan == "free":
         return jsonify({
             "message": "🔒 Premium insight locked",
-            "preview": "High-profit opportunity detected...",
-            "upgrade": "Upgrade to PREMIUM to unlock full intelligence"
+            "preview": "High-profit opportunity detected in East Africa...",
+            "why_upgrade": [
+                "Unlock full opportunity details",
+                "Get confidence score",
+                "See urgency level",
+                "Access premium market alerts"
+            ],
+            "upgrade_price": f"{PAY_AMOUNT} {PAY_CURRENCY}",
+            "payment_link": f"{BASE_URL}/hdi/pay?key={key}"
         }), 403
 
     return jsonify({
