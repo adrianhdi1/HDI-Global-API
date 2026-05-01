@@ -9,6 +9,7 @@ app = Flask(__name__)
 DB = "hdi.db"
 
 FLW_SECRET_KEY = os.environ.get("FLW_SECRET_KEY")
+FLW_SECRET_HASH = os.environ.get("FLW_SECRET_HASH")
 BASE_URL = "https://hdi-global-api.onrender.com"
 PAY_AMOUNT = 10
 PAY_CURRENCY = "USD"
@@ -172,6 +173,7 @@ def premium_alerts():
 @app.route("/hdi/pay")
 def pay():
     api_key = request.args.get("key")
+
     if not api_key:
         return jsonify({"error": "Missing API key"}), 400
 
@@ -271,13 +273,7 @@ def verify_payment():
         or float(paid_amount) < float(PAY_AMOUNT)
         or paid_currency != PAY_CURRENCY
     ):
-        return jsonify({
-            "error": "Payment not valid",
-            "payment_status": paid_status,
-            "tx_ref": paid_tx_ref,
-            "amount": paid_amount,
-            "currency": paid_currency
-        }), 400
+        return jsonify({"error": "Payment not valid"}), 400
 
     conn = get_conn()
     payment_row = conn.execute(
@@ -297,7 +293,6 @@ def verify_payment():
         "UPDATE users SET plan='premium', premium_until=? WHERE api_key=?",
         (expiry, api_key)
     )
-
     conn.commit()
     conn.close()
 
@@ -311,6 +306,48 @@ def verify_payment():
         "plan": "premium",
         "premium_until": expiry
     })
+
+@app.route("/hdi/webhook", methods=["POST"])
+def webhook():
+    signature = request.headers.get("verif-hash")
+
+    if FLW_SECRET_HASH and signature != FLW_SECRET_HASH:
+        return jsonify({"error": "Invalid signature"}), 401
+
+    data = request.get_json() or {}
+
+    if data.get("event") == "charge.completed":
+        payment = data.get("data", {})
+        tx_ref = payment.get("tx_ref")
+        status = payment.get("status")
+
+        if status == "successful" and tx_ref:
+            conn = get_conn()
+
+            payment_row = conn.execute(
+                "SELECT api_key FROM payments WHERE tx_ref=?",
+                (tx_ref,)
+            ).fetchone()
+
+            if payment_row:
+                api_key = payment_row[0]
+                expiry = premium_expiry()
+
+                conn.execute(
+                    "UPDATE users SET plan='premium', premium_until=? WHERE api_key=?",
+                    (expiry, api_key)
+                )
+
+                conn.execute(
+                    "UPDATE payments SET status='successful' WHERE tx_ref=?",
+                    (tx_ref,)
+                )
+
+                conn.commit()
+
+            conn.close()
+
+    return jsonify({"status": "ok"})
 
 if __name__ == "__main__":
     app.run()
