@@ -112,13 +112,11 @@ def get_user():
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    active = is_premium(user[4], user[5])
-
     return jsonify({
         "name": user[1],
         "email": user[2],
         "plan": user[4],
-        "premium_active": active,
+        "premium_active": is_premium(user[4], user[5]),
         "premium_until": user[5],
         "api_key": user[3]
     })
@@ -136,12 +134,21 @@ def premium_alerts():
 
     if not is_premium(user[4], user[5]):
         return jsonify({
-            "message": "🔒 Premium insight locked",
-            "preview": "High-profit opportunity detected in East Africa...",
+            "status": "locked",
+            "message": "🔒 HDI Intelligence Signal Locked",
+            "ai_preview": {
+                "detected_pattern": "Rising opportunity pressure in East Africa",
+                "sector_hint": "Agriculture Export",
+                "market_signal": "Demand movement detected",
+                "estimated_margin_range": "18% - 27%",
+                "confidence_score": "Locked",
+                "urgency_window": "Locked",
+                "full_country_breakdown": "Locked"
+            },
             "why_upgrade": [
-                "Unlock full opportunity details",
-                "Get confidence score",
-                "See urgency level",
+                "Unlock exact country and sector",
+                "View confidence score",
+                "See urgency window",
                 "Access premium market alerts"
             ],
             "upgrade_price": f"{PAY_AMOUNT} {PAY_CURRENCY}/month",
@@ -152,9 +159,14 @@ def premium_alerts():
         "user": user[1],
         "plan": "premium",
         "premium_until": user[5],
-        "alert": "🔥 Full opportunity: Agriculture export opportunity in East Africa worth $500K+",
+        "signal": "🔥 Premium HDI Signal",
+        "country": "Tanzania",
+        "sector": "Agriculture Export",
+        "opportunity": "Coffee and food export demand rising across East Africa",
+        "estimated_margin": "18% - 27%",
         "confidence": "91%",
-        "urgency": "HIGH"
+        "urgency": "HIGH",
+        "window": "Next 7 days"
     })
 
 @app.route("/hdi/pay")
@@ -191,7 +203,7 @@ def pay():
         },
         "customizations": {
             "title": "HDI Premium Monthly",
-            "description": "30 days HDI premium access"
+            "description": "30 days HDI premium intelligence access"
         }
     }
 
@@ -285,6 +297,7 @@ def verify_payment():
         "UPDATE users SET plan='premium', premium_until=? WHERE api_key=?",
         (expiry, api_key)
     )
+
     conn.commit()
     conn.close()
 
@@ -300,4 +313,3 @@ def verify_payment():
     })
 
 if __name__ == "__main__":
-    app.run()
