@@ -1,24 +1,30 @@
 from flask import Flask, jsonify, request
-import sqlite3
 import uuid
 import os
 import requests
+import psycopg2
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
-DB = "hdi.db"
 
 FLW_SECRET_KEY = os.environ.get("FLW_SECRET_KEY")
 FLW_SECRET_HASH = os.environ.get("FLW_SECRET_HASH")
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
 BASE_URL = "https://hdi-global-api.onrender.com"
 PAY_AMOUNT = 10
 PAY_CURRENCY = "USD"
 
+def get_conn():
+    return psycopg2.connect(DATABASE_URL)
+
 def init_db():
-    conn = sqlite3.connect(DB)
-    conn.execute("""
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         name TEXT,
         email TEXT UNIQUE,
         api_key TEXT UNIQUE,
@@ -26,9 +32,10 @@ def init_db():
         premium_until TEXT
     )
     """)
-    conn.execute("""
+
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS payments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         api_key TEXT,
         tx_ref TEXT UNIQUE,
         amount REAL,
@@ -36,17 +43,12 @@ def init_db():
         status TEXT DEFAULT 'pending'
     )
     """)
-    try:
-        conn.execute("ALTER TABLE users ADD COLUMN premium_until TEXT")
-    except sqlite3.OperationalError:
-        pass
+
     conn.commit()
+    cur.close()
     conn.close()
 
 init_db()
-
-def get_conn():
-    return sqlite3.connect(DB)
 
 def now_utc():
     return datetime.utcnow()
@@ -64,16 +66,19 @@ def is_premium(plan, premium_until):
 
 def get_user_by_key(api_key):
     conn = get_conn()
-    user = conn.execute(
-        "SELECT id, name, email, api_key, plan, premium_until FROM users WHERE api_key=?",
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, name, email, api_key, plan, premium_until FROM users WHERE api_key=%s",
         (api_key,)
-    ).fetchone()
+    )
+    user = cur.fetchone()
+    cur.close()
     conn.close()
     return user
 
 @app.route("/")
 def home():
-    return jsonify({"message": "HDI API LIVE 🚀"})
+    return jsonify({"message": "HDI API with Postgres LIVE 🚀"})
 
 @app.route("/hdi/create-user", methods=["POST"])
 def create_user():
@@ -88,14 +93,16 @@ def create_user():
 
     try:
         conn = get_conn()
-        conn.execute(
-            "INSERT INTO users (name, email, api_key, plan, premium_until) VALUES (?, ?, ?, ?, ?)",
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO users (name, email, api_key, plan, premium_until) VALUES (%s, %s, %s, %s, %s)",
             (name, email, api_key, "free", None)
         )
         conn.commit()
+        cur.close()
         conn.close()
-    except sqlite3.IntegrityError:
-        return jsonify({"error": "Email already exists"}), 409
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
     return jsonify({
         "message": "User created",
@@ -187,11 +194,13 @@ def pay():
     tx_ref = "HDI-TX-" + uuid.uuid4().hex[:12].upper()
 
     conn = get_conn()
-    conn.execute(
-        "INSERT INTO payments (api_key, tx_ref, amount, currency, status) VALUES (?, ?, ?, ?, ?)",
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO payments (api_key, tx_ref, amount, currency, status) VALUES (%s, %s, %s, %s, %s)",
         (api_key, tx_ref, PAY_AMOUNT, PAY_CURRENCY, "pending")
     )
     conn.commit()
+    cur.close()
     conn.close()
 
     payload = {
@@ -244,9 +253,6 @@ def verify_payment():
     if not transaction_id or not tx_ref:
         return jsonify({"error": "transaction_id and tx_ref are required"}), 400
 
-    if not FLW_SECRET_KEY:
-        return jsonify({"error": "Flutterwave secret key not configured"}), 500
-
     headers = {"Authorization": f"Bearer {FLW_SECRET_KEY}"}
 
     verify_res = requests.get(
@@ -261,39 +267,45 @@ def verify_payment():
         return jsonify({"error": "Verification failed", "details": verify_data}), 400
 
     payment = verify_data.get("data", {})
-    paid_status = payment.get("status")
-    paid_tx_ref = payment.get("tx_ref")
-    paid_amount = payment.get("amount")
-    paid_currency = payment.get("currency")
 
     if (
         status != "successful"
-        or paid_status != "successful"
-        or paid_tx_ref != tx_ref
-        or float(paid_amount) < float(PAY_AMOUNT)
-        or paid_currency != PAY_CURRENCY
+        or payment.get("status") != "successful"
+        or payment.get("tx_ref") != tx_ref
+        or float(payment.get("amount")) < float(PAY_AMOUNT)
+        or payment.get("currency") != PAY_CURRENCY
     ):
         return jsonify({"error": "Payment not valid"}), 400
 
     conn = get_conn()
-    payment_row = conn.execute(
-        "SELECT api_key FROM payments WHERE tx_ref=?",
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT api_key FROM payments WHERE tx_ref=%s",
         (tx_ref,)
-    ).fetchone()
+    )
+    payment_row = cur.fetchone()
 
     if not payment_row:
+        cur.close()
         conn.close()
         return jsonify({"error": "Payment record not found"}), 404
 
     api_key = payment_row[0]
     expiry = premium_expiry()
 
-    conn.execute("UPDATE payments SET status='successful' WHERE tx_ref=?", (tx_ref,))
-    conn.execute(
-        "UPDATE users SET plan='premium', premium_until=? WHERE api_key=?",
+    cur.execute(
+        "UPDATE payments SET status='successful' WHERE tx_ref=%s",
+        (tx_ref,)
+    )
+
+    cur.execute(
+        "UPDATE users SET plan='premium', premium_until=%s WHERE api_key=%s",
         (expiry, api_key)
     )
+
     conn.commit()
+    cur.close()
     conn.close()
 
     user = get_user_by_key(api_key)
@@ -323,28 +335,31 @@ def webhook():
 
         if status == "successful" and tx_ref:
             conn = get_conn()
+            cur = conn.cursor()
 
-            payment_row = conn.execute(
-                "SELECT api_key FROM payments WHERE tx_ref=?",
+            cur.execute(
+                "SELECT api_key FROM payments WHERE tx_ref=%s",
                 (tx_ref,)
-            ).fetchone()
+            )
+            payment_row = cur.fetchone()
 
             if payment_row:
                 api_key = payment_row[0]
                 expiry = premium_expiry()
 
-                conn.execute(
-                    "UPDATE users SET plan='premium', premium_until=? WHERE api_key=?",
+                cur.execute(
+                    "UPDATE users SET plan='premium', premium_until=%s WHERE api_key=%s",
                     (expiry, api_key)
                 )
 
-                conn.execute(
-                    "UPDATE payments SET status='successful' WHERE tx_ref=?",
+                cur.execute(
+                    "UPDATE payments SET status='successful' WHERE tx_ref=%s",
                     (tx_ref,)
                 )
 
                 conn.commit()
 
+            cur.close()
             conn.close()
 
     return jsonify({"status": "ok"})
