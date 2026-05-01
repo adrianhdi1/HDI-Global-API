@@ -3,6 +3,7 @@ import sqlite3
 import uuid
 import os
 import requests
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 DB = "hdi.db"
@@ -20,7 +21,8 @@ def init_db():
         name TEXT,
         email TEXT UNIQUE,
         api_key TEXT UNIQUE,
-        plan TEXT DEFAULT 'free'
+        plan TEXT DEFAULT 'free',
+        premium_until TEXT
     )
     """)
     conn.execute("""
@@ -33,6 +35,10 @@ def init_db():
         status TEXT DEFAULT 'pending'
     )
     """)
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN premium_until TEXT")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
@@ -41,10 +47,24 @@ init_db()
 def get_conn():
     return sqlite3.connect(DB)
 
+def now_utc():
+    return datetime.utcnow()
+
+def premium_expiry():
+    return (now_utc() + timedelta(days=30)).isoformat()
+
+def is_premium(plan, premium_until):
+    if plan != "premium" or not premium_until:
+        return False
+    try:
+        return datetime.fromisoformat(premium_until) > now_utc()
+    except ValueError:
+        return False
+
 def get_user_by_key(api_key):
     conn = get_conn()
     user = conn.execute(
-        "SELECT id, name, email, api_key, plan FROM users WHERE api_key=?",
+        "SELECT id, name, email, api_key, plan, premium_until FROM users WHERE api_key=?",
         (api_key,)
     ).fetchone()
     conn.close()
@@ -57,7 +77,6 @@ def home():
 @app.route("/hdi/create-user", methods=["POST"])
 def create_user():
     data = request.get_json() or {}
-
     name = data.get("name")
     email = data.get("email")
 
@@ -69,8 +88,8 @@ def create_user():
     try:
         conn = get_conn()
         conn.execute(
-            "INSERT INTO users (name, email, api_key) VALUES (?, ?, ?)",
-            (name, email, api_key)
+            "INSERT INTO users (name, email, api_key, plan, premium_until) VALUES (?, ?, ?, ?, ?)",
+            (name, email, api_key, "free", None)
         )
         conn.commit()
         conn.close()
@@ -86,26 +105,27 @@ def create_user():
 @app.route("/hdi/user")
 def get_user():
     key = request.args.get("key")
-
     if not key:
         return jsonify({"error": "key is required"}), 400
 
     user = get_user_by_key(key)
-
     if not user:
         return jsonify({"error": "User not found"}), 404
+
+    active = is_premium(user[4], user[5])
 
     return jsonify({
         "name": user[1],
         "email": user[2],
         "plan": user[4],
+        "premium_active": active,
+        "premium_until": user[5],
         "api_key": user[3]
     })
 
 @app.route("/hdi/premium-alerts")
 def premium_alerts():
     key = request.args.get("key")
-
     user = get_user_by_key(key)
 
     if not user:
@@ -114,10 +134,7 @@ def premium_alerts():
             "upgrade": "Create an HDI account to access intelligence signals"
         }), 403
 
-    name = user[1]
-    plan = user[4]
-
-    if plan == "free":
+    if not is_premium(user[4], user[5]):
         return jsonify({
             "message": "🔒 Premium insight locked",
             "preview": "High-profit opportunity detected in East Africa...",
@@ -127,13 +144,14 @@ def premium_alerts():
                 "See urgency level",
                 "Access premium market alerts"
             ],
-            "upgrade_price": f"{PAY_AMOUNT} {PAY_CURRENCY}",
+            "upgrade_price": f"{PAY_AMOUNT} {PAY_CURRENCY}/month",
             "payment_link": f"{BASE_URL}/hdi/pay?key={key}"
         }), 403
 
     return jsonify({
-        "user": name,
-        "plan": plan,
+        "user": user[1],
+        "plan": "premium",
+        "premium_until": user[5],
         "alert": "🔥 Full opportunity: Agriculture export opportunity in East Africa worth $500K+",
         "confidence": "91%",
         "urgency": "HIGH"
@@ -142,12 +160,10 @@ def premium_alerts():
 @app.route("/hdi/pay")
 def pay():
     api_key = request.args.get("key")
-
     if not api_key:
         return jsonify({"error": "Missing API key"}), 400
 
     user = get_user_by_key(api_key)
-
     if not user:
         return jsonify({"error": "Invalid API key"}), 404
 
@@ -174,8 +190,8 @@ def pay():
             "name": user[1]
         },
         "customizations": {
-            "title": "HDI Premium Access",
-            "description": "Unlock premium HDI intelligence"
+            "title": "HDI Premium Monthly",
+            "description": "30 days HDI premium access"
         }
     }
 
@@ -217,9 +233,7 @@ def verify_payment():
     if not FLW_SECRET_KEY:
         return jsonify({"error": "Flutterwave secret key not configured"}), 500
 
-    headers = {
-        "Authorization": f"Bearer {FLW_SECRET_KEY}"
-    }
+    headers = {"Authorization": f"Bearer {FLW_SECRET_KEY}"}
 
     verify_res = requests.get(
         f"https://api.flutterwave.com/v3/transactions/{transaction_id}/verify",
@@ -230,13 +244,9 @@ def verify_payment():
     verify_data = verify_res.json()
 
     if verify_res.status_code != 200 or verify_data.get("status") != "success":
-        return jsonify({
-            "error": "Verification failed",
-            "details": verify_data
-        }), 400
+        return jsonify({"error": "Verification failed", "details": verify_data}), 400
 
     payment = verify_data.get("data", {})
-
     paid_status = payment.get("status")
     paid_tx_ref = payment.get("tx_ref")
     paid_amount = payment.get("amount")
@@ -258,7 +268,6 @@ def verify_payment():
         }), 400
 
     conn = get_conn()
-
     payment_row = conn.execute(
         "SELECT api_key FROM payments WHERE tx_ref=?",
         (tx_ref,)
@@ -269,28 +278,25 @@ def verify_payment():
         return jsonify({"error": "Payment record not found"}), 404
 
     api_key = payment_row[0]
+    expiry = premium_expiry()
 
+    conn.execute("UPDATE payments SET status='successful' WHERE tx_ref=?", (tx_ref,))
     conn.execute(
-        "UPDATE payments SET status='successful' WHERE tx_ref=?",
-        (tx_ref,)
+        "UPDATE users SET plan='premium', premium_until=? WHERE api_key=?",
+        (expiry, api_key)
     )
-
-    conn.execute(
-        "UPDATE users SET plan='premium' WHERE api_key=?",
-        (api_key,)
-    )
-
     conn.commit()
     conn.close()
 
     user = get_user_by_key(api_key)
 
     return jsonify({
-        "message": "Payment verified and user upgraded",
+        "message": "Payment verified. Premium activated for 30 days.",
         "user": user[1],
         "email": user[2],
         "api_key": api_key,
-        "plan": "premium"
+        "plan": "premium",
+        "premium_until": expiry
     })
 
 if __name__ == "__main__":
