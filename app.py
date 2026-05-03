@@ -77,7 +77,7 @@ def get_user_by_key(api_key):
     conn.close()
     return user
 
-# 🔥 LANDING + SIGNUP
+# 🔥 LANDING + SIGNUP + PAY BUTTON
 @app.route("/")
 def home():
     return """
@@ -120,6 +120,15 @@ def home():
                 margin-top: 20px;
                 color: #38bdf8;
             }
+            .pay {
+                background: #16a34a;
+                padding: 12px 20px;
+                border-radius: 10px;
+                text-decoration: none;
+                color: white;
+                display: inline-block;
+                margin-top: 15px;
+            }
         </style>
     </head>
     <body>
@@ -149,8 +158,9 @@ def home():
 
                 if (data.api_key) {
                     document.getElementById("result").innerHTML =
-                        "Your Key: " + data.api_key +
-                        "<br><br><a href='/hdi/premium-alerts?key=" + data.api_key + "'>View Signals</a>";
+                        "<strong>Your Key:</strong> " + data.api_key +
+                        "<br><br><a href='/hdi/premium-alerts?key=" + data.api_key + "'>View Signals</a>" +
+                        "<br><br><a class='pay' href='/hdi/pay?key=" + data.api_key + "'>Upgrade Now 💰</a>";
                 } else {
                     document.getElementById("result").innerHTML = "Error creating user";
                 }
