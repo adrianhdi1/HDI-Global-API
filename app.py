@@ -10,6 +10,7 @@ app = Flask(__name__)
 FLW_SECRET_KEY = os.environ.get("FLW_SECRET_KEY")
 FLW_SECRET_HASH = os.environ.get("FLW_SECRET_HASH")
 DATABASE_URL = os.environ.get("DATABASE_URL")
+ADMIN_KEY = os.environ.get("ADMIN_KEY")
 
 BASE_URL = "https://hdi-global-api.onrender.com"
 PAY_AMOUNT = 10
@@ -61,7 +62,7 @@ def is_premium(plan, premium_until):
         return False
     try:
         return datetime.fromisoformat(premium_until) > now_utc()
-    except ValueError:
+    except:
         return False
 
 def get_user_by_key(api_key):
@@ -78,7 +79,7 @@ def get_user_by_key(api_key):
 
 @app.route("/")
 def home():
-    return jsonify({"message": "HDI API with Postgres LIVE 🚀"})
+    return jsonify({"message": "HDI API LIVE 🚀"})
 
 @app.route("/hdi/create-user", methods=["POST"])
 def create_user():
@@ -87,46 +88,35 @@ def create_user():
     email = data.get("email")
 
     if not name or not email:
-        return jsonify({"error": "name and email are required"}), 400
+        return jsonify({"error": "name and email required"}), 400
 
     api_key = "HDI-" + uuid.uuid4().hex[:10].upper()
 
-    try:
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO users (name, email, api_key, plan, premium_until) VALUES (%s, %s, %s, %s, %s)",
-            (name, email, api_key, "free", None)
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO users (name, email, api_key) VALUES (%s, %s, %s)",
+        (name, email, api_key)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
 
-    return jsonify({
-        "message": "User created",
-        "api_key": api_key,
-        "plan": "free"
-    })
+    return jsonify({"api_key": api_key})
 
 @app.route("/hdi/user")
 def get_user():
     key = request.args.get("key")
-    if not key:
-        return jsonify({"error": "key is required"}), 400
-
     user = get_user_by_key(key)
+
     if not user:
         return jsonify({"error": "User not found"}), 404
 
     return jsonify({
         "name": user[1],
-        "email": user[2],
         "plan": user[4],
         "premium_active": is_premium(user[4], user[5]),
-        "premium_until": user[5],
-        "api_key": user[3]
+        "premium_until": user[5]
     })
 
 @app.route("/hdi/premium-alerts")
@@ -135,261 +125,106 @@ def premium_alerts():
     user = get_user_by_key(key)
 
     if not user:
-        return jsonify({
-            "error": "Invalid API key",
-            "upgrade": "Create an HDI account to access intelligence signals"
-        }), 403
+        return jsonify({"error": "Invalid API key"}), 403
 
     if not is_premium(user[4], user[5]):
         return jsonify({
-            "status": "locked",
-            "message": "🔒 HDI Intelligence Signal Locked",
-            "ai_preview": {
-                "detected_pattern": "Rising opportunity pressure in East Africa",
-                "sector_hint": "Agriculture Export",
-                "market_signal": "Demand movement detected",
-                "estimated_margin_range": "18% - 27%",
-                "confidence_score": "Locked",
-                "urgency_window": "Locked",
-                "full_country_breakdown": "Locked"
-            },
-            "why_upgrade": [
-                "Unlock exact country and sector",
-                "View confidence score",
-                "See urgency window",
-                "Access premium market alerts"
-            ],
-            "upgrade_price": f"{PAY_AMOUNT} {PAY_CURRENCY}/month",
+            "message": "🔒 Locked",
+            "preview": "High-profit opportunity detected...",
             "payment_link": f"{BASE_URL}/hdi/pay?key={key}"
         }), 403
 
     return jsonify({
-        "user": user[1],
-        "plan": "premium",
-        "premium_until": user[5],
-        "signal": "🔥 Premium HDI Signal",
-        "country": "Tanzania",
-        "sector": "Agriculture Export",
-        "opportunity": "Coffee and food export demand rising across East Africa",
-        "estimated_margin": "18% - 27%",
-        "confidence": "91%",
-        "urgency": "HIGH",
-        "window": "Next 7 days"
+        "signal": "🔥 Premium opportunity",
+        "margin": "18% - 27%",
+        "urgency": "HIGH"
     })
 
 @app.route("/hdi/pay")
 def pay():
-    api_key = request.args.get("key")
+    key = request.args.get("key")
+    user = get_user_by_key(key)
 
-    if not api_key:
-        return jsonify({"error": "Missing API key"}), 400
-
-    user = get_user_by_key(api_key)
     if not user:
         return jsonify({"error": "Invalid API key"}), 404
 
-    if not FLW_SECRET_KEY:
-        return jsonify({"error": "Flutterwave secret key not configured"}), 500
-
-    tx_ref = "HDI-TX-" + uuid.uuid4().hex[:12].upper()
+    tx_ref = "HDI-TX-" + uuid.uuid4().hex[:12]
 
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO payments (api_key, tx_ref, amount, currency, status) VALUES (%s, %s, %s, %s, %s)",
-        (api_key, tx_ref, PAY_AMOUNT, PAY_CURRENCY, "pending")
+        "INSERT INTO payments (api_key, tx_ref, amount, currency) VALUES (%s,%s,%s,%s)",
+        (key, tx_ref, PAY_AMOUNT, PAY_CURRENCY)
     )
     conn.commit()
     cur.close()
     conn.close()
+
+    headers = {"Authorization": f"Bearer {FLW_SECRET_KEY}"}
 
     payload = {
         "tx_ref": tx_ref,
         "amount": PAY_AMOUNT,
         "currency": PAY_CURRENCY,
         "redirect_url": f"{BASE_URL}/hdi/verify-payment",
-        "customer": {
-            "email": user[2],
-            "name": user[1]
-        },
-        "customizations": {
-            "title": "HDI Premium Monthly",
-            "description": "30 days HDI premium intelligence access"
-        }
+        "customer": {"email": user[2], "name": user[1]}
     }
 
-    headers = {
-        "Authorization": f"Bearer {FLW_SECRET_KEY}",
-        "Content-Type": "application/json"
-    }
+    res = requests.post("https://api.flutterwave.com/v3/payments",
+                        json=payload, headers=headers)
 
-    res = requests.post(
-        "https://api.flutterwave.com/v3/payments",
-        json=payload,
-        headers=headers,
-        timeout=30
-    )
-
-    data = res.json()
-
-    if res.status_code != 200 or data.get("status") != "success":
-        return jsonify({
-            "error": "Failed to create payment link",
-            "details": data
-        }), 400
-
-    return jsonify({
-        "message": "Payment link created",
-        "payment_link": data["data"]["link"],
-        "tx_ref": tx_ref
-    })
-
-@app.route("/hdi/verify-payment")
-def verify_payment():
-    transaction_id = request.args.get("transaction_id")
-    tx_ref = request.args.get("tx_ref")
-    status = request.args.get("status")
-
-    if not transaction_id or not tx_ref:
-        return jsonify({"error": "transaction_id and tx_ref are required"}), 400
-
-    headers = {"Authorization": f"Bearer {FLW_SECRET_KEY}"}
-
-    verify_res = requests.get(
-        f"https://api.flutterwave.com/v3/transactions/{transaction_id}/verify",
-        headers=headers,
-        timeout=30
-    )
-
-    verify_data = verify_res.json()
-
-    if verify_res.status_code != 200 or verify_data.get("status") != "success":
-        return jsonify({"error": "Verification failed", "details": verify_data}), 400
-
-    payment = verify_data.get("data", {})
-
-    if (
-        status != "successful"
-        or payment.get("status") != "successful"
-        or payment.get("tx_ref") != tx_ref
-        or float(payment.get("amount")) < float(PAY_AMOUNT)
-        or payment.get("currency") != PAY_CURRENCY
-    ):
-        return jsonify({"error": "Payment not valid"}), 400
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute(
-        "SELECT api_key FROM payments WHERE tx_ref=%s",
-        (tx_ref,)
-    )
-    payment_row = cur.fetchone()
-
-    if not payment_row:
-        cur.close()
-        conn.close()
-        return jsonify({"error": "Payment record not found"}), 404
-
-    api_key = payment_row[0]
-    expiry = premium_expiry()
-
-    cur.execute(
-        "UPDATE payments SET status='successful' WHERE tx_ref=%s",
-        (tx_ref,)
-    )
-
-    cur.execute(
-        "UPDATE users SET plan='premium', premium_until=%s WHERE api_key=%s",
-        (expiry, api_key)
-    )
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    user = get_user_by_key(api_key)
-
-    return jsonify({
-        "message": "Payment verified. Premium activated for 30 days.",
-        "user": user[1],
-        "email": user[2],
-        "api_key": api_key,
-        "plan": "premium",
-        "premium_until": expiry
-    })
+    return jsonify(res.json())
 
 @app.route("/hdi/webhook", methods=["POST"])
 def webhook():
-    signature = request.headers.get("verif-hash")
+    if request.headers.get("verif-hash") != FLW_SECRET_HASH:
+        return jsonify({"error": "Unauthorized"}), 401
 
-    if FLW_SECRET_HASH and signature != FLW_SECRET_HASH:
-        return jsonify({"error": "Invalid signature"}), 401
-
-    data = request.get_json() or {}
-
+    data = request.get_json()
     if data.get("event") == "charge.completed":
-        payment = data.get("data", {})
-        tx_ref = payment.get("tx_ref")
-        status = payment.get("status")
+        tx_ref = data["data"]["tx_ref"]
 
-        if status == "successful" and tx_ref:
-            conn = get_conn()
-            cur = conn.cursor()
+        conn = get_conn()
+        cur = conn.cursor()
 
-            cur.execute(
-                "SELECT api_key FROM payments WHERE tx_ref=%s",
-                (tx_ref,)
-            )
-            payment_row = cur.fetchone()
+        cur.execute("SELECT api_key FROM payments WHERE tx_ref=%s", (tx_ref,))
+        row = cur.fetchone()
 
-            if payment_row:
-                api_key = payment_row[0]
-                expiry = premium_expiry()
+        if row:
+            expiry = premium_expiry()
+            cur.execute("UPDATE users SET plan='premium', premium_until=%s WHERE api_key=%s",
+                        (expiry, row[0]))
 
-                cur.execute(
-                    "UPDATE users SET plan='premium', premium_until=%s WHERE api_key=%s",
-                    (expiry, api_key)
-                )
-
-                cur.execute(
-                    "UPDATE payments SET status='successful' WHERE tx_ref=%s",
-                    (tx_ref,)
-                )
-
-                conn.commit()
-
-            cur.close()
-            conn.close()
+        conn.commit()
+        cur.close()
+        conn.close()
 
     return jsonify({"status": "ok"})
 
 @app.route("/hdi/admin")
-def admin_dashboard():
+def admin():
+    if request.args.get("key") != ADMIN_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+
     conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("SELECT COUNT(*) FROM users")
-    total_users = cur.fetchone()[0]
+    users = cur.fetchone()[0]
 
     cur.execute("SELECT COUNT(*) FROM users WHERE plan='premium'")
-    premium_users = cur.fetchone()[0]
+    premium = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM payments WHERE status='successful'")
-    successful_payments = cur.fetchone()[0]
-
-    cur.execute("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status='successful'")
+    cur.execute("SELECT COALESCE(SUM(amount),0) FROM payments")
     revenue = cur.fetchone()[0]
 
     cur.close()
     conn.close()
 
     return jsonify({
-        "total_users": total_users,
-        "premium_users": premium_users,
-        "successful_payments": successful_payments,
-        "revenue": revenue,
-        "currency": PAY_CURRENCY
+        "users": users,
+        "premium": premium,
+        "revenue": revenue
     })
 
 if __name__ == "__main__":
