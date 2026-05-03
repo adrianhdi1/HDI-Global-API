@@ -51,17 +51,14 @@ def init_db():
 
 init_db()
 
-def now_utc():
-    return datetime.utcnow()
-
 def premium_expiry():
-    return (now_utc() + timedelta(days=30)).isoformat()
+    return (datetime.utcnow() + timedelta(days=30)).isoformat()
 
 def is_premium(plan, premium_until):
     if plan != "premium" or not premium_until:
         return False
     try:
-        return datetime.fromisoformat(premium_until) > now_utc()
+        return datetime.fromisoformat(premium_until) > datetime.utcnow()
     except:
         return False
 
@@ -77,98 +74,109 @@ def get_user_by_key(api_key):
     conn.close()
     return user
 
-# 🔥 LANDING + SIGNUP + PAY BUTTON
 @app.route("/")
 def home():
     return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>HDI Intelligence</title>
-        <style>
-            body {
-                font-family: Arial;
-                background: #050816;
-                color: white;
-                text-align: center;
-                padding: 60px;
-            }
-            .card {
-                max-width: 700px;
-                margin: auto;
-                background: #111827;
-                padding: 40px;
-                border-radius: 18px;
-            }
-            input {
-                padding: 12px;
-                margin: 8px;
-                width: 80%;
-                border-radius: 8px;
-                border: none;
-            }
-            button {
-                padding: 12px 24px;
-                background: #2563eb;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                margin-top: 10px;
-                cursor: pointer;
-            }
-            .result {
-                margin-top: 20px;
-                color: #38bdf8;
-            }
-            .pay {
-                background: #16a34a;
-                padding: 12px 20px;
-                border-radius: 10px;
-                text-decoration: none;
-                color: white;
-                display: inline-block;
-                margin-top: 15px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <h1>HDI Intelligence</h1>
-            <p>AI-powered opportunity signals</p>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HDI Intelligence</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #050816;
+            color: white;
+            text-align: center;
+            padding: 60px;
+        }
+        .card {
+            max-width: 700px;
+            margin: auto;
+            background: #111827;
+            padding: 40px;
+            border-radius: 18px;
+        }
+        input {
+            padding: 12px;
+            margin: 8px;
+            width: 80%;
+            border-radius: 8px;
+            border: none;
+        }
+        button {
+            padding: 12px 24px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+        .pay {
+            background: #16a34a;
+            padding: 12px 20px;
+            border-radius: 10px;
+            text-decoration: none;
+            color: white;
+            display: inline-block;
+            margin-top: 15px;
+        }
+        .result {
+            margin-top: 20px;
+            color: #38bdf8;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>HDI Intelligence</h1>
+        <p>AI-powered opportunity signals for Africa</p>
 
-            <input id="name" placeholder="Your Name"><br>
-            <input id="email" placeholder="Your Email"><br>
-            <button onclick="createUser()">Get Access</button>
+        <input id="name" placeholder="Your Name"><br>
+        <input id="email" placeholder="Your Email"><br>
 
-            <div id="result" class="result"></div>
-        </div>
+        <button onclick="createUser()">Get Access</button>
 
-        <script>
-            async function createUser() {
-                let name = document.getElementById("name").value;
-                let email = document.getElementById("email").value;
+        <div id="result" class="result"></div>
+    </div>
 
-                let res = await fetch("/hdi/create-user", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({name, email})
-                });
+    <script>
+    async function createUser() {
+        try {
+            let name = document.getElementById("name").value;
+            let email = document.getElementById("email").value;
 
-                let data = await res.json();
-
-                if (data.api_key) {
-                    document.getElementById("result").innerHTML =
-                        "<strong>Your Key:</strong> " + data.api_key +
-                        "<br><br><a href='/hdi/premium-alerts?key=" + data.api_key + "'>View Signals</a>" +
-                        "<br><br><a class='pay' href='/hdi/pay?key=" + data.api_key + "'>Upgrade Now 💰</a>";
-                } else {
-                    document.getElementById("result").innerHTML = "Error creating user";
-                }
+            if (!name || !email) {
+                alert("Please enter name and email");
+                return;
             }
-        </script>
-    </body>
-    </html>
-    """
+
+            let res = await fetch("/hdi/create-user", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({name: name, email: email})
+            });
+
+            let data = await res.json();
+
+            if (data.api_key) {
+                document.getElementById("result").innerHTML =
+                    "<strong>Your Key:</strong> " + data.api_key +
+                    "<br><br><a href='/hdi/premium-alerts?key=" + data.api_key + "'>View Signals</a>" +
+                    "<br><br><a class='pay' href='/hdi/pay?key=" + data.api_key + "'>Upgrade Now 💰</a>";
+            } else {
+                document.getElementById("result").innerHTML =
+                    "Error: " + JSON.stringify(data);
+            }
+        } catch (err) {
+            document.getElementById("result").innerHTML =
+                "Something went wrong. Try again.";
+        }
+    }
+    </script>
+</body>
+</html>
+"""
 
 @app.route("/hdi/create-user", methods=["POST"])
 def create_user():
@@ -181,15 +189,18 @@ def create_user():
 
     api_key = "HDI-" + uuid.uuid4().hex[:10].upper()
 
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO users (name, email, api_key) VALUES (%s, %s, %s)",
-        (name, email, api_key)
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO users (name, email, api_key) VALUES (%s, %s, %s)",
+            (name, email, api_key)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
     return jsonify({"api_key": api_key})
 
@@ -219,6 +230,9 @@ def pay():
     key = request.args.get("key")
     user = get_user_by_key(key)
 
+    if not user:
+        return jsonify({"error": "Invalid key"}), 403
+
     tx_ref = "HDI-" + uuid.uuid4().hex[:12]
 
     conn = get_conn()
@@ -231,7 +245,10 @@ def pay():
     cur.close()
     conn.close()
 
-    headers = {"Authorization": f"Bearer {FLW_SECRET_KEY}"}
+    headers = {
+        "Authorization": f"Bearer {FLW_SECRET_KEY}",
+        "Content-Type": "application/json"
+    }
 
     payload = {
         "tx_ref": tx_ref,
@@ -241,8 +258,11 @@ def pay():
         "customer": {"email": user[2], "name": user[1]}
     }
 
-    res = requests.post("https://api.flutterwave.com/v3/payments",
-                        json=payload, headers=headers)
+    res = requests.post(
+        "https://api.flutterwave.com/v3/payments",
+        json=payload,
+        headers=headers
+    )
 
     return jsonify(res.json())
 
@@ -251,13 +271,13 @@ def webhook():
     if request.headers.get("verif-hash") != FLW_SECRET_HASH:
         return jsonify({"error": "Unauthorized"}), 401
 
-    data = request.get_json()
+    data = request.get_json() or {}
+
     if data.get("event") == "charge.completed":
         tx_ref = data["data"]["tx_ref"]
 
         conn = get_conn()
         cur = conn.cursor()
-
         cur.execute("SELECT api_key FROM payments WHERE tx_ref=%s", (tx_ref,))
         row = cur.fetchone()
 
@@ -266,6 +286,10 @@ def webhook():
             cur.execute(
                 "UPDATE users SET plan='premium', premium_until=%s WHERE api_key=%s",
                 (expiry, row[0])
+            )
+            cur.execute(
+                "UPDATE payments SET status='successful' WHERE tx_ref=%s",
+                (tx_ref,)
             )
 
         conn.commit()
