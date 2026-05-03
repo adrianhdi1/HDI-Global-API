@@ -77,18 +77,59 @@ def get_user_by_key(api_key):
     conn.close()
     return user
 
+# 🔥 LANDING PAGE
 @app.route("/")
 def home():
-    return jsonify({"message": "HDI API LIVE 🚀"})
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>HDI Global Intelligence</title>
+        <style>
+            body {
+                font-family: Arial;
+                background: #050816;
+                color: white;
+                text-align: center;
+                padding: 60px;
+            }
+            .card {
+                max-width: 700px;
+                margin: auto;
+                background: #111827;
+                padding: 40px;
+                border-radius: 18px;
+            }
+            h1 { font-size: 42px; }
+            p { color: #cbd5e1; }
+            .btn {
+                margin-top: 20px;
+                padding: 14px 24px;
+                background: #2563eb;
+                color: white;
+                text-decoration: none;
+                border-radius: 10px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h1>HDI Intelligence</h1>
+            <p>AI-powered opportunity signals for Africa</p>
+            <p>Free preview. Premium unlocks full intelligence.</p>
+            <a class="btn" href="/hdi/premium-alerts?key=DEMO_KEY">
+                Try Preview
+            </a>
+        </div>
+    </body>
+    </html>
+    """
 
 @app.route("/hdi/create-user", methods=["POST"])
 def create_user():
     data = request.get_json() or {}
     name = data.get("name")
     email = data.get("email")
-
-    if not name or not email:
-        return jsonify({"error": "name and email required"}), 400
 
     api_key = "HDI-" + uuid.uuid4().hex[:10].upper()
 
@@ -104,39 +145,24 @@ def create_user():
 
     return jsonify({"api_key": api_key})
 
-@app.route("/hdi/user")
-def get_user():
-    key = request.args.get("key")
-    user = get_user_by_key(key)
-
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-
-    return jsonify({
-        "name": user[1],
-        "plan": user[4],
-        "premium_active": is_premium(user[4], user[5]),
-        "premium_until": user[5]
-    })
-
 @app.route("/hdi/premium-alerts")
-def premium_alerts():
+def premium():
     key = request.args.get("key")
     user = get_user_by_key(key)
 
     if not user:
-        return jsonify({"error": "Invalid API key"}), 403
+        return jsonify({"error": "Invalid key"}), 403
 
     if not is_premium(user[4], user[5]):
         return jsonify({
-            "message": "🔒 Locked",
-            "preview": "High-profit opportunity detected...",
-            "payment_link": f"{BASE_URL}/hdi/pay?key={key}"
+            "locked": True,
+            "preview": "Opportunity detected...",
+            "payment": f"{BASE_URL}/hdi/pay?key={key}"
         }), 403
 
     return jsonify({
         "signal": "🔥 Premium opportunity",
-        "margin": "18% - 27%",
+        "margin": "20%",
         "urgency": "HIGH"
     })
 
@@ -145,10 +171,7 @@ def pay():
     key = request.args.get("key")
     user = get_user_by_key(key)
 
-    if not user:
-        return jsonify({"error": "Invalid API key"}), 404
-
-    tx_ref = "HDI-TX-" + uuid.uuid4().hex[:12]
+    tx_ref = "HDI-" + uuid.uuid4().hex[:12]
 
     conn = get_conn()
     cur = conn.cursor()
@@ -192,14 +215,16 @@ def webhook():
 
         if row:
             expiry = premium_expiry()
-            cur.execute("UPDATE users SET plan='premium', premium_until=%s WHERE api_key=%s",
-                        (expiry, row[0]))
+            cur.execute(
+                "UPDATE users SET plan='premium', premium_until=%s WHERE api_key=%s",
+                (expiry, row[0])
+            )
 
         conn.commit()
         cur.close()
         conn.close()
 
-    return jsonify({"status": "ok"})
+    return jsonify({"ok": True})
 
 @app.route("/hdi/admin")
 def admin():
