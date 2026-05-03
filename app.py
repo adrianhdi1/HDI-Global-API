@@ -77,14 +77,14 @@ def get_user_by_key(api_key):
     conn.close()
     return user
 
-# 🔥 LANDING PAGE
+# 🔥 LANDING + SIGNUP
 @app.route("/")
 def home():
     return """
     <!DOCTYPE html>
     <html>
     <head>
-        <title>HDI Global Intelligence</title>
+        <title>HDI Intelligence</title>
         <style>
             body {
                 font-family: Arial;
@@ -100,27 +100,62 @@ def home():
                 padding: 40px;
                 border-radius: 18px;
             }
-            h1 { font-size: 42px; }
-            p { color: #cbd5e1; }
-            .btn {
-                margin-top: 20px;
-                padding: 14px 24px;
+            input {
+                padding: 12px;
+                margin: 8px;
+                width: 80%;
+                border-radius: 8px;
+                border: none;
+            }
+            button {
+                padding: 12px 24px;
                 background: #2563eb;
                 color: white;
-                text-decoration: none;
+                border: none;
                 border-radius: 10px;
+                margin-top: 10px;
+                cursor: pointer;
+            }
+            .result {
+                margin-top: 20px;
+                color: #38bdf8;
             }
         </style>
     </head>
     <body>
         <div class="card">
             <h1>HDI Intelligence</h1>
-            <p>AI-powered opportunity signals for Africa</p>
-            <p>Free preview. Premium unlocks full intelligence.</p>
-            <a class="btn" href="/hdi/premium-alerts?key=DEMO_KEY">
-                Try Preview
-            </a>
+            <p>AI-powered opportunity signals</p>
+
+            <input id="name" placeholder="Your Name"><br>
+            <input id="email" placeholder="Your Email"><br>
+            <button onclick="createUser()">Get Access</button>
+
+            <div id="result" class="result"></div>
         </div>
+
+        <script>
+            async function createUser() {
+                let name = document.getElementById("name").value;
+                let email = document.getElementById("email").value;
+
+                let res = await fetch("/hdi/create-user", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({name, email})
+                });
+
+                let data = await res.json();
+
+                if (data.api_key) {
+                    document.getElementById("result").innerHTML =
+                        "Your Key: " + data.api_key +
+                        "<br><br><a href='/hdi/premium-alerts?key=" + data.api_key + "'>View Signals</a>";
+                } else {
+                    document.getElementById("result").innerHTML = "Error creating user";
+                }
+            }
+        </script>
     </body>
     </html>
     """
@@ -130,6 +165,9 @@ def create_user():
     data = request.get_json() or {}
     name = data.get("name")
     email = data.get("email")
+
+    if not name or not email:
+        return jsonify({"error": "Missing fields"}), 400
 
     api_key = "HDI-" + uuid.uuid4().hex[:10].upper()
 
@@ -156,7 +194,7 @@ def premium():
     if not is_premium(user[4], user[5]):
         return jsonify({
             "locked": True,
-            "preview": "Opportunity detected...",
+            "preview": "High-profit opportunity detected...",
             "payment": f"{BASE_URL}/hdi/pay?key={key}"
         }), 403
 
