@@ -364,5 +364,33 @@ def webhook():
 
     return jsonify({"status": "ok"})
 
+@app.route("/hdi/admin")
+def admin_dashboard():
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("SELECT COUNT(*) FROM users")
+    total_users = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM users WHERE plan='premium'")
+    premium_users = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM payments WHERE status='successful'")
+    successful_payments = cur.fetchone()[0]
+
+    cur.execute("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status='successful'")
+    revenue = cur.fetchone()[0]
+
+    cur.close()
+    conn.close()
+
+    return jsonify({
+        "total_users": total_users,
+        "premium_users": premium_users,
+        "successful_payments": successful_payments,
+        "revenue": revenue,
+        "currency": PAY_CURRENCY
+    })
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
