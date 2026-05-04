@@ -4,6 +4,8 @@ import os
 import requests
 import psycopg2
 import random
+import smtplib
+from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
@@ -12,6 +14,8 @@ FLW_SECRET_KEY = os.environ.get("FLW_SECRET_KEY")
 FLW_SECRET_HASH = os.environ.get("FLW_SECRET_HASH")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 ADMIN_KEY = os.environ.get("ADMIN_KEY")
+EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")
+EMAIL_APP_PASSWORD = os.environ.get("EMAIL_APP_PASSWORD")
 
 BASE_URL = "https://hdi-global-api.onrender.com"
 PAY_AMOUNT = 10
@@ -31,28 +35,37 @@ RISKS = ["LOW", "MODERATE", "CONTROLLED"]
 URGENCIES = ["HIGH", "MEDIUM", "CRITICAL"]
 
 def generate_signal():
-    country = random.choice(COUNTRIES)
-    sector = random.choice(SECTORS)
-    opportunity = random.choice(OPPORTUNITIES)
     margin_low = random.randint(12, 21)
     margin_high = margin_low + random.randint(5, 12)
-    confidence = random.randint(84, 97)
-    unlocked_today = random.randint(12, 48)
-    urgency = random.choice(URGENCIES)
-    risk = random.choice(RISKS)
-    hours = random.randint(3, 12)
 
     return {
-        "country": country,
-        "sector": sector,
-        "opportunity": opportunity,
+        "country": random.choice(COUNTRIES),
+        "sector": random.choice(SECTORS),
+        "opportunity": random.choice(OPPORTUNITIES),
         "margin": f"{margin_low}% - {margin_high}%",
-        "confidence": f"{confidence}%",
-        "urgency": urgency,
-        "risk": risk,
-        "window": f"Next {hours} hours",
-        "unlocked_today": unlocked_today
+        "confidence": f"{random.randint(84, 97)}%",
+        "urgency": random.choice(URGENCIES),
+        "risk": random.choice(RISKS),
+        "window": f"Next {random.randint(3, 12)} hours",
+        "unlocked_today": random.randint(12, 48)
     }
+
+def send_email(to_email, subject, message):
+    try:
+        msg = MIMEText(message)
+        msg["Subject"] = subject
+        msg["From"] = EMAIL_ADDRESS
+        msg["To"] = to_email
+
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server.login(EMAIL_ADDRESS, EMAIL_APP_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+
+        return True
+    except Exception as e:
+        print("Email error:", e)
+        return False
 
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
@@ -338,6 +351,39 @@ def pay():
         return redirect(data["data"]["link"])
 
     return jsonify(data)
+
+@app.route("/hdi/test-email")
+def test_email():
+    email = request.args.get("email")
+
+    if not email:
+        return "Provide email like /hdi/test-email?email=you@gmail.com"
+
+    signal = generate_signal()
+
+    subject = "🔥 New HDI AI Signal Detected"
+    message = f"""
+New HDI AI Signal Detected
+
+Country: {signal["country"]}
+Sector: {signal["sector"]}
+Opportunity: {signal["opportunity"]}
+Estimated Margin: {signal["margin"]}
+Confidence: {signal["confidence"]}
+Urgency: {signal["urgency"]}
+Risk: {signal["risk"]}
+Window: {signal["window"]}
+
+Open HDI:
+{BASE_URL}
+"""
+
+    sent = send_email(email, subject, message)
+
+    if sent:
+        return "Email sent"
+
+    return "Email failed"
 
 @app.route("/hdi/webhook", methods=["POST"])
 def webhook():
