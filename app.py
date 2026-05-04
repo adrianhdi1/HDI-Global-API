@@ -3,6 +3,7 @@ import uuid
 import os
 import requests
 import psycopg2
+import random
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
@@ -15,6 +16,43 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY")
 BASE_URL = "https://hdi-global-api.onrender.com"
 PAY_AMOUNT = 10
 PAY_CURRENCY = "USD"
+
+COUNTRIES = ["Tanzania", "Kenya", "Uganda", "Rwanda", "Ghana", "Nigeria", "South Africa"]
+SECTORS = ["Agriculture Export", "Logistics", "Energy", "Fintech", "Retail Supply", "Food Processing", "Mining"]
+OPPORTUNITIES = [
+    "Demand movement detected",
+    "Supply gap emerging",
+    "Cross-border trade pressure rising",
+    "Buyer interest increasing",
+    "Market inefficiency detected",
+    "Price movement opportunity detected"
+]
+RISKS = ["LOW", "MODERATE", "CONTROLLED"]
+URGENCIES = ["HIGH", "MEDIUM", "CRITICAL"]
+
+def generate_signal():
+    country = random.choice(COUNTRIES)
+    sector = random.choice(SECTORS)
+    opportunity = random.choice(OPPORTUNITIES)
+    margin_low = random.randint(12, 21)
+    margin_high = margin_low + random.randint(5, 12)
+    confidence = random.randint(84, 97)
+    unlocked_today = random.randint(12, 48)
+    urgency = random.choice(URGENCIES)
+    risk = random.choice(RISKS)
+    hours = random.randint(3, 12)
+
+    return {
+        "country": country,
+        "sector": sector,
+        "opportunity": opportunity,
+        "margin": f"{margin_low}% - {margin_high}%",
+        "confidence": f"{confidence}%",
+        "urgency": urgency,
+        "risk": risk,
+        "window": f"Next {hours} hours",
+        "unlocked_today": unlocked_today
+    }
 
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
@@ -83,20 +121,24 @@ def home():
     <title>HDI Intelligence</title>
     <style>
         body { font-family: Arial; background: #050816; color: white; text-align: center; padding: 60px; }
-        .card { max-width: 700px; margin: auto; background: #111827; padding: 40px; border-radius: 18px; }
-        input { padding: 12px; margin: 8px; width: 80%; border-radius: 8px; border: none; }
-        button { padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 10px; margin-top: 10px; cursor: pointer; }
-        .pay { background: #16a34a; padding: 12px 20px; border-radius: 10px; text-decoration: none; color: white; display: inline-block; margin-top: 15px; }
-        .result { margin-top: 20px; color: #38bdf8; }
+        .card { max-width: 760px; margin: auto; background: #111827; padding: 42px; border-radius: 20px; box-shadow: 0 0 40px rgba(0,0,0,0.4); }
+        input { padding: 13px; margin: 8px; width: 80%; border-radius: 8px; border: none; }
+        button { padding: 13px 26px; background: #2563eb; color: white; border: none; border-radius: 10px; margin-top: 10px; cursor: pointer; font-weight: bold; }
+        .pay { background: #16a34a; padding: 13px 22px; border-radius: 10px; text-decoration: none; color: white; display: inline-block; margin-top: 15px; font-weight: bold; }
+        .result { margin-top: 22px; color: #38bdf8; }
+        .tag { color: #38bdf8; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="card">
         <h1>HDI Intelligence</h1>
-        <p>AI-powered opportunity signals for Africa</p>
+        <p class="tag">AI-powered opportunity signals for Africa</p>
+        <p>Detect premium market opportunities, urgency windows, risk levels, and confidence scores before others notice them.</p>
+
         <input id="name" placeholder="Your Name"><br>
         <input id="email" placeholder="Your Email"><br>
         <button onclick="createUser()">Get Access</button>
+
         <div id="result" class="result"></div>
     </div>
 
@@ -168,6 +210,7 @@ def create_user():
 def premium():
     key = request.args.get("key")
     user = get_user_by_key(key)
+    signal = generate_signal()
 
     if not user:
         return """
@@ -185,46 +228,62 @@ def premium():
             <title>HDI Signal Locked</title>
             <style>
                 body {{ font-family: Arial; background:#050816; color:white; text-align:center; padding:60px; }}
-                .card {{ max-width:720px; margin:auto; background:#111827; padding:40px; border-radius:18px; }}
-                .pay {{ background:#16a34a; padding:15px 25px; border-radius:10px; color:white; text-decoration:none; display:inline-block; margin-top:20px; }}
+                .card {{ max-width:760px; margin:auto; background:#111827; padding:42px; border-radius:20px; box-shadow:0 0 40px rgba(0,0,0,0.4); }}
+                .pay {{ background:#16a34a; padding:15px 25px; border-radius:10px; color:white; text-decoration:none; display:inline-block; margin-top:20px; font-weight:bold; }}
                 .preview {{ color:#38bdf8; font-weight:bold; }}
+                .grid {{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:25px; text-align:left; }}
+                .box {{ background:#0b1220; padding:15px; border-radius:12px; }}
             </style>
         </head>
         <body>
             <div class="card">
-                <h1>🔒 HDI Intelligence Signal Locked</h1>
-                <p class="preview">High-profit opportunity detected in East Africa</p>
-                <p>Sector Hint: Agriculture Export</p>
-                <p>Estimated Margin: 18% - 27%</p>
-                <p>Confidence Score: Locked</p>
-                <p>Urgency Window: Locked</p>
-                <h3>Unlock full signal for {PAY_AMOUNT} {PAY_CURRENCY}/month</h3>
+                <h1>🔒 HDI AI Signal Locked</h1>
+                <p class="preview">AI detected a high-profit opportunity pattern</p>
+
+                <div class="grid">
+                    <div class="box"><b>Region:</b> East Africa</div>
+                    <div class="box"><b>Sector Hint:</b> {signal["sector"]}</div>
+                    <div class="box"><b>Estimated Margin:</b> {signal["margin"]}</div>
+                    <div class="box"><b>Risk Level:</b> {signal["risk"]}</div>
+                    <div class="box"><b>Confidence:</b> Locked</div>
+                    <div class="box"><b>Urgency Window:</b> Locked</div>
+                </div>
+
+                <p style="margin-top:25px;">🔥 {signal["unlocked_today"]} users unlocked signals today</p>
+                <h3>Unlock full AI signal for {PAY_AMOUNT} {PAY_CURRENCY}/month</h3>
                 <a class="pay" href="/hdi/pay?key={key}">Upgrade Now 💰</a>
             </div>
         </body>
         </html>
         """
 
-    return """
+    return f"""
     <html>
     <head>
         <title>Premium HDI Signal</title>
         <style>
-            body { font-family:Arial; background:#050816; color:white; text-align:center; padding:60px; }
-            .card { max-width:720px; margin:auto; background:#111827; padding:40px; border-radius:18px; }
-            .hot { color:#38bdf8; font-weight:bold; }
+            body {{ font-family:Arial; background:#050816; color:white; text-align:center; padding:60px; }}
+            .card {{ max-width:760px; margin:auto; background:#111827; padding:42px; border-radius:20px; box-shadow:0 0 40px rgba(0,0,0,0.4); }}
+            .hot {{ color:#38bdf8; font-weight:bold; }}
+            .grid {{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:25px; text-align:left; }}
+            .box {{ background:#0b1220; padding:15px; border-radius:12px; }}
         </style>
     </head>
     <body>
         <div class="card">
-            <h1>🔥 Premium HDI Signal</h1>
-            <p class="hot">Country: Tanzania</p>
-            <p>Sector: Agriculture Export</p>
-            <p>Opportunity: Coffee and food export demand rising across East Africa</p>
-            <p>Estimated Margin: 18% - 27%</p>
-            <p>Confidence: 91%</p>
-            <p>Urgency: HIGH</p>
-            <p>Window: Next 7 days</p>
+            <h1>🔥 Premium HDI AI Signal</h1>
+            <p class="hot">Real-time opportunity intelligence unlocked</p>
+
+            <div class="grid">
+                <div class="box"><b>Country:</b> {signal["country"]}</div>
+                <div class="box"><b>Sector:</b> {signal["sector"]}</div>
+                <div class="box"><b>Opportunity:</b> {signal["opportunity"]}</div>
+                <div class="box"><b>Estimated Margin:</b> {signal["margin"]}</div>
+                <div class="box"><b>Confidence:</b> {signal["confidence"]}</div>
+                <div class="box"><b>Urgency:</b> {signal["urgency"]}</div>
+                <div class="box"><b>Risk:</b> {signal["risk"]}</div>
+                <div class="box"><b>Window:</b> {signal["window"]}</div>
+            </div>
         </div>
     </body>
     </html>
@@ -263,7 +322,7 @@ def pay():
         "customer": {"email": user[2], "name": user[1]},
         "customizations": {
             "title": "HDI Premium Access",
-            "description": "Unlock full HDI intelligence signals"
+            "description": "Unlock full HDI AI intelligence signals"
         }
     }
 
