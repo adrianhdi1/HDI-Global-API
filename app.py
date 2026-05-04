@@ -4,8 +4,6 @@ import os
 import requests
 import psycopg2
 import random
-import smtplib
-from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
@@ -14,58 +12,37 @@ FLW_SECRET_KEY = os.environ.get("FLW_SECRET_KEY")
 FLW_SECRET_HASH = os.environ.get("FLW_SECRET_HASH")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 ADMIN_KEY = os.environ.get("ADMIN_KEY")
-EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")
-EMAIL_APP_PASSWORD = os.environ.get("EMAIL_APP_PASSWORD")
 
 BASE_URL = "https://hdi-global-api.onrender.com"
 PAY_AMOUNT = 10
 PAY_CURRENCY = "USD"
 
-COUNTRIES = ["Tanzania", "Kenya", "Uganda", "Rwanda", "Ghana", "Nigeria", "South Africa"]
-SECTORS = ["Agriculture Export", "Logistics", "Energy", "Fintech", "Retail Supply", "Food Processing", "Mining"]
+COUNTRIES = ["Tanzania","Kenya","Uganda","Rwanda","Nigeria","Ghana"]
+SECTORS = ["Agriculture Export","Logistics","Energy","Fintech","Retail","Mining"]
 OPPORTUNITIES = [
-    "Demand movement detected",
+    "Demand surge detected",
     "Supply gap emerging",
-    "Cross-border trade pressure rising",
     "Buyer interest increasing",
-    "Market inefficiency detected",
-    "Price movement opportunity detected"
+    "Price inefficiency detected"
 ]
-RISKS = ["LOW", "MODERATE", "CONTROLLED"]
-URGENCIES = ["HIGH", "MEDIUM", "CRITICAL"]
+RISKS = ["LOW","MODERATE"]
+URGENCIES = ["HIGH","CRITICAL"]
 
 def generate_signal():
-    margin_low = random.randint(12, 21)
-    margin_high = margin_low + random.randint(5, 12)
+    margin_low = random.randint(12,20)
+    margin_high = margin_low + random.randint(5,10)
 
     return {
         "country": random.choice(COUNTRIES),
         "sector": random.choice(SECTORS),
         "opportunity": random.choice(OPPORTUNITIES),
         "margin": f"{margin_low}% - {margin_high}%",
-        "confidence": f"{random.randint(84, 97)}%",
+        "confidence": f"{random.randint(85,97)}%",
         "urgency": random.choice(URGENCIES),
         "risk": random.choice(RISKS),
-        "window": f"Next {random.randint(3, 12)} hours",
-        "unlocked_today": random.randint(12, 48)
+        "window_hours": random.randint(3,6),
+        "unlocked_today": random.randint(10,40)
     }
-
-def send_email(to_email, subject, message):
-    try:
-        msg = MIMEText(message)
-        msg["Subject"] = subject
-        msg["From"] = EMAIL_ADDRESS
-        msg["To"] = to_email
-
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        server.login(EMAIL_ADDRESS, EMAIL_APP_PASSWORD)
-        server.send_message(msg)
-        server.quit()
-
-        return True
-    except Exception as e:
-        print("Email error:", e)
-        return False
 
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
@@ -73,29 +50,22 @@ def get_conn():
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS users (
+    cur.execute("""CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         name TEXT,
         email TEXT UNIQUE,
         api_key TEXT UNIQUE,
         plan TEXT DEFAULT 'free',
         premium_until TEXT
-    )
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS payments (
+    )""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS payments (
         id SERIAL PRIMARY KEY,
         api_key TEXT,
         tx_ref TEXT UNIQUE,
         amount REAL,
         currency TEXT,
         status TEXT DEFAULT 'pending'
-    )
-    """)
-
+    )""")
     conn.commit()
     cur.close()
     conn.close()
@@ -116,10 +86,7 @@ def is_premium(plan, premium_until):
 def get_user_by_key(api_key):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT id, name, email, api_key, plan, premium_until FROM users WHERE api_key=%s",
-        (api_key,)
-    )
+    cur.execute("SELECT * FROM users WHERE api_key=%s",(api_key,))
     user = cur.fetchone()
     cur.close()
     conn.close()
@@ -128,344 +95,168 @@ def get_user_by_key(api_key):
 @app.route("/")
 def home():
     return """
-<!DOCTYPE html>
 <html>
 <head>
-    <title>HDI Intelligence</title>
-    <style>
-        body { font-family: Arial; background: #050816; color: white; text-align: center; padding: 60px; }
-        .card { max-width: 760px; margin: auto; background: #111827; padding: 42px; border-radius: 20px; box-shadow: 0 0 40px rgba(0,0,0,0.4); }
-        input { padding: 13px; margin: 8px; width: 80%; border-radius: 8px; border: none; }
-        button { padding: 13px 26px; background: #2563eb; color: white; border: none; border-radius: 10px; margin-top: 10px; cursor: pointer; font-weight: bold; }
-        .pay { background: #16a34a; padding: 13px 22px; border-radius: 10px; text-decoration: none; color: white; display: inline-block; margin-top: 15px; font-weight: bold; }
-        .result { margin-top: 22px; color: #38bdf8; }
-        .tag { color: #38bdf8; font-weight: bold; }
-    </style>
+<title>HDI</title>
+<style>
+body{font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;}
+.card{max-width:700px;margin:auto;background:#111827;padding:40px;border-radius:20px;}
+input{padding:12px;margin:8px;width:80%;border-radius:8px;border:none;}
+button{padding:12px 24px;background:#2563eb;color:white;border:none;border-radius:10px;}
+.pay{background:#16a34a;padding:12px 20px;border-radius:10px;color:white;text-decoration:none;display:inline-block;margin-top:15px;}
+</style>
 </head>
 <body>
-    <div class="card">
-        <h1>HDI Intelligence</h1>
-        <p class="tag">AI-powered opportunity signals for Africa</p>
-        <p>Detect premium market opportunities, urgency windows, risk levels, and confidence scores before others notice them.</p>
+<div class="card">
+<h1>HDI Intelligence</h1>
+<p>AI opportunity signals</p>
 
-        <input id="name" placeholder="Your Name"><br>
-        <input id="email" placeholder="Your Email"><br>
-        <button onclick="createUser()">Get Access</button>
+<input id="name" placeholder="Name"><br>
+<input id="email" placeholder="Email"><br>
+<button onclick="createUser()">Get Access</button>
 
-        <div id="result" class="result"></div>
-    </div>
+<div id="result"></div>
+</div>
 
-    <script>
-    async function createUser() {
-        try {
-            let name = document.getElementById("name").value;
-            let email = document.getElementById("email").value;
+<script>
+async function createUser(){
+let name=document.getElementById("name").value;
+let email=document.getElementById("email").value;
 
-            if (!name || !email) {
-                alert("Please enter name and email");
-                return;
-            }
+let res=await fetch("/hdi/create-user",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({name,email})
+});
 
-            let res = await fetch("/hdi/create-user", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({name: name, email: email})
-            });
+let data=await res.json();
 
-            let data = await res.json();
-
-            if (data.api_key) {
-                document.getElementById("result").innerHTML =
-                    "<strong>Your Key:</strong> " + data.api_key +
-                    "<br><br><a href='/hdi/premium-alerts?key=" + data.api_key + "'>View Signals</a>" +
-                    "<br><br><a class='pay' href='/hdi/pay?key=" + data.api_key + "'>Upgrade Now 💰</a>";
-            } else {
-                document.getElementById("result").innerHTML =
-                    "Error: " + JSON.stringify(data);
-            }
-        } catch (err) {
-            document.getElementById("result").innerHTML =
-                "Something went wrong. Try again.";
-        }
-    }
-    </script>
+document.getElementById("result").innerHTML=
+"Key: "+data.api_key+
+"<br><a href='/hdi/premium-alerts?key="+data.api_key+"'>View Signals</a>"+
+"<br><a class='pay' href='/hdi/pay?key="+data.api_key+"'>Upgrade 💰</a>";
+}
+</script>
 </body>
 </html>
 """
 
 @app.route("/hdi/create-user", methods=["POST"])
 def create_user():
-    data = request.get_json() or {}
-    name = data.get("name")
-    email = data.get("email")
+    data=request.get_json()
+    api_key="HDI-"+uuid.uuid4().hex[:10].upper()
 
-    if not name or not email:
-        return jsonify({"error": "Missing fields"}), 400
-
-    api_key = "HDI-" + uuid.uuid4().hex[:10].upper()
-
-    try:
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO users (name, email, api_key) VALUES (%s, %s, %s)",
-            (name, email, api_key)
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-    return jsonify({"api_key": api_key})
-
-@app.route("/hdi/premium-alerts")
-def premium():
-    key = request.args.get("key")
-    user = get_user_by_key(key)
-    signal = generate_signal()
-
-    if not user:
-        return """
-        <html><body style="font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;">
-        <h1>Invalid API Key</h1>
-        <p>Please create an HDI account first.</p>
-        <a href="/" style="color:#38bdf8;">Go back</a>
-        </body></html>
-        """
-
-    if not is_premium(user[4], user[5]):
-        return f"""
-        <html>
-        <head>
-            <title>HDI Signal Locked</title>
-            <style>
-                body {{ font-family: Arial; background:#050816; color:white; text-align:center; padding:60px; }}
-                .card {{ max-width:760px; margin:auto; background:#111827; padding:42px; border-radius:20px; box-shadow:0 0 40px rgba(0,0,0,0.4); }}
-                .pay {{ background:#16a34a; padding:15px 25px; border-radius:10px; color:white; text-decoration:none; display:inline-block; margin-top:20px; font-weight:bold; }}
-                .preview {{ color:#38bdf8; font-weight:bold; }}
-                .grid {{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:25px; text-align:left; }}
-                .box {{ background:#0b1220; padding:15px; border-radius:12px; }}
-            </style>
-        </head>
-        <body>
-            <div class="card">
-                <h1>🔒 HDI AI Signal Locked</h1>
-                <p class="preview">AI detected a high-profit opportunity pattern</p>
-
-                <div class="grid">
-                    <div class="box"><b>Region:</b> East Africa</div>
-                    <div class="box"><b>Sector Hint:</b> {signal["sector"]}</div>
-                    <div class="box"><b>Estimated Margin:</b> {signal["margin"]}</div>
-                    <div class="box"><b>Risk Level:</b> {signal["risk"]}</div>
-                    <div class="box"><b>Confidence:</b> Locked</div>
-                    <div class="box"><b>Urgency Window:</b> Locked</div>
-                </div>
-
-                <p style="margin-top:25px;">🔥 {signal["unlocked_today"]} users unlocked signals today</p>
-                <h3>Unlock full AI signal for {PAY_AMOUNT} {PAY_CURRENCY}/month</h3>
-                <a class="pay" href="/hdi/pay?key={key}">Upgrade Now 💰</a>
-            </div>
-        </body>
-        </html>
-        """
-
-    return f"""
-    <html>
-    <head>
-        <title>Premium HDI Signal</title>
-        <style>
-            body {{ font-family:Arial; background:#050816; color:white; text-align:center; padding:60px; }}
-            .card {{ max-width:760px; margin:auto; background:#111827; padding:42px; border-radius:20px; box-shadow:0 0 40px rgba(0,0,0,0.4); }}
-            .hot {{ color:#38bdf8; font-weight:bold; }}
-            .grid {{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:25px; text-align:left; }}
-            .box {{ background:#0b1220; padding:15px; border-radius:12px; }}
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <h1>🔥 Premium HDI AI Signal</h1>
-            <p class="hot">Real-time opportunity intelligence unlocked</p>
-
-            <div class="grid">
-                <div class="box"><b>Country:</b> {signal["country"]}</div>
-                <div class="box"><b>Sector:</b> {signal["sector"]}</div>
-                <div class="box"><b>Opportunity:</b> {signal["opportunity"]}</div>
-                <div class="box"><b>Estimated Margin:</b> {signal["margin"]}</div>
-                <div class="box"><b>Confidence:</b> {signal["confidence"]}</div>
-                <div class="box"><b>Urgency:</b> {signal["urgency"]}</div>
-                <div class="box"><b>Risk:</b> {signal["risk"]}</div>
-                <div class="box"><b>Window:</b> {signal["window"]}</div>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-
-@app.route("/hdi/pay")
-def pay():
-    key = request.args.get("key")
-    user = get_user_by_key(key)
-
-    if not user:
-        return jsonify({"error": "Invalid key"}), 403
-
-    tx_ref = "HDI-" + uuid.uuid4().hex[:12]
-
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO payments (api_key, tx_ref, amount, currency) VALUES (%s,%s,%s,%s)",
-        (key, tx_ref, PAY_AMOUNT, PAY_CURRENCY)
-    )
+    conn=get_conn()
+    cur=conn.cursor()
+    cur.execute("INSERT INTO users(name,email,api_key) VALUES(%s,%s,%s)",
+    (data["name"],data["email"],api_key))
     conn.commit()
     cur.close()
     conn.close()
 
-    headers = {
-        "Authorization": f"Bearer {FLW_SECRET_KEY}",
-        "Content-Type": "application/json"
-    }
+    return jsonify({"api_key":api_key})
 
-    payload = {
-        "tx_ref": tx_ref,
-        "amount": PAY_AMOUNT,
-        "currency": PAY_CURRENCY,
-        "redirect_url": f"{BASE_URL}/hdi/verify-payment",
-        "customer": {"email": user[2], "name": user[1]},
-        "customizations": {
-            "title": "HDI Premium Access",
-            "description": "Unlock full HDI AI intelligence signals"
-        }
-    }
+@app.route("/hdi/premium-alerts")
+def premium():
+    key=request.args.get("key")
+    user=get_user_by_key(key)
+    signal=generate_signal()
 
-    res = requests.post(
-        "https://api.flutterwave.com/v3/payments",
-        json=payload,
-        headers=headers
-    )
+    if not user:
+        return "Invalid key"
 
-    data = res.json()
+    if not is_premium(user[4],user[5]):
+        hours=signal["window_hours"]
 
-    if data.get("status") == "success":
-        return redirect(data["data"]["link"])
+        return f"""
+<html>
+<head>
+<style>
+body{{font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;}}
+.card{{max-width:700px;margin:auto;background:#111827;padding:40px;border-radius:20px;}}
+.box{{background:#0b1220;padding:15px;margin:10px;border-radius:10px;text-align:left;}}
+.pay{{background:#16a34a;padding:15px 25px;border-radius:10px;color:white;text-decoration:none;display:inline-block;margin-top:20px;}}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>🔒 Signal Locked</h1>
 
-    return jsonify(data)
+<div class="box">Sector: {signal["sector"]}</div>
+<div class="box">Margin: {signal["margin"]}</div>
+<div class="box">Risk: {signal["risk"]}</div>
 
-@app.route("/hdi/test-email")
-def test_email():
-    email = request.args.get("email")
+<div class="box">⏳ Window closes in: <span id="countdown"></span></div>
 
-    if not email:
-        return "Provide email like /hdi/test-email?email=you@gmail.com"
+<p>🔥 {signal["unlocked_today"]} users unlocked today</p>
 
-    signal = generate_signal()
+<a class="pay" href="/hdi/pay?key={key}">Upgrade Now 💰</a>
+</div>
 
-    subject = "🔥 New HDI AI Signal Detected"
-    message = f"""
-New HDI AI Signal Detected
+<script>
+let seconds = {hours} * 3600;
 
-Country: {signal["country"]}
-Sector: {signal["sector"]}
-Opportunity: {signal["opportunity"]}
-Estimated Margin: {signal["margin"]}
-Confidence: {signal["confidence"]}
-Urgency: {signal["urgency"]}
-Risk: {signal["risk"]}
-Window: {signal["window"]}
+function update(){{
+let h=Math.floor(seconds/3600);
+let m=Math.floor((seconds%3600)/60);
+let s=seconds%60;
 
-Open HDI:
-{BASE_URL}
+document.getElementById("countdown").innerHTML=
+String(h).padStart(2,"0")+":"+
+String(m).padStart(2,"0")+":"+
+String(s).padStart(2,"0");
+
+if(seconds>0) seconds--;
+}}
+
+setInterval(update,1000);
+update();
+</script>
+
+</body>
+</html>
 """
 
-    sent = send_email(email, subject, message)
+    return f"""
+<html><body style="background:#050816;color:white;text-align:center;padding:60px;">
+<h1>🔥 Premium Signal</h1>
+<p>{signal["country"]}</p>
+<p>{signal["sector"]}</p>
+<p>{signal["margin"]}</p>
+<p>{signal["confidence"]}</p>
+<p>{signal["urgency"]}</p>
+</body></html>
+"""
 
-    if sent:
-        return "Email sent"
+@app.route("/hdi/pay")
+def pay():
+    key=request.args.get("key")
+    user=get_user_by_key(key)
 
-    return "Email failed"
+    tx_ref="HDI-"+uuid.uuid4().hex[:12]
 
-@app.route("/hdi/webhook", methods=["POST"])
-def webhook():
-    if request.headers.get("verif-hash") != FLW_SECRET_HASH:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    data = request.get_json() or {}
-
-    if data.get("event") == "charge.completed":
-        tx_ref = data["data"]["tx_ref"]
-
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("SELECT api_key FROM payments WHERE tx_ref=%s", (tx_ref,))
-        row = cur.fetchone()
-
-        if row:
-            expiry = premium_expiry()
-            cur.execute(
-                "UPDATE users SET plan='premium', premium_until=%s WHERE api_key=%s",
-                (expiry, row[0])
-            )
-            cur.execute(
-                "UPDATE payments SET status='successful' WHERE tx_ref=%s",
-                (tx_ref,)
-            )
-
-        conn.commit()
-        cur.close()
-        conn.close()
-
-    return jsonify({"ok": True})
-
-@app.route("/hdi/admin")
-def admin():
-    if request.args.get("key") != ADMIN_KEY:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("SELECT COUNT(*) FROM users")
-    users = cur.fetchone()[0]
-
-    cur.execute("SELECT COUNT(*) FROM users WHERE plan='premium'")
-    premium = cur.fetchone()[0]
-
-    cur.execute("SELECT COALESCE(SUM(amount),0) FROM payments")
-    revenue = cur.fetchone()[0]
-
+    conn=get_conn()
+    cur=conn.cursor()
+    cur.execute("INSERT INTO payments(api_key,tx_ref,amount,currency) VALUES(%s,%s,%s,%s)",
+    (key,tx_ref,PAY_AMOUNT,PAY_CURRENCY))
+    conn.commit()
     cur.close()
     conn.close()
 
-    return jsonify({
-        "users": users,
-        "premium": premium,
-        "revenue": revenue
-    })
+    headers={"Authorization":f"Bearer {FLW_SECRET_KEY}"}
 
-@app.route("/hdi/leads")
-def leads():
-    if request.args.get("key") != ADMIN_KEY:
-        return jsonify({"error": "Unauthorized"}), 401
+    payload={
+        "tx_ref":tx_ref,
+        "amount":PAY_AMOUNT,
+        "currency":PAY_CURRENCY,
+        "redirect_url":BASE_URL,
+        "customer":{"email":user[2],"name":user[1]}
+    }
 
-    conn = get_conn()
-    cur = conn.cursor()
+    res=requests.post("https://api.flutterwave.com/v3/payments",json=payload,headers=headers)
+    data=res.json()
 
-    cur.execute("SELECT name, email, plan FROM users ORDER BY id DESC LIMIT 50")
-    rows = cur.fetchall()
+    return redirect(data["data"]["link"])
 
-    cur.close()
-    conn.close()
-
-    data = []
-    for r in rows:
-        data.append({
-            "name": r[0],
-            "email": r[1],
-            "plan": r[2]
-        })
-
-    return jsonify(data)
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+if __name__=="__main__":
+    app.run(host="0.0.0.0",port=int(os.environ.get("PORT",10000)))
