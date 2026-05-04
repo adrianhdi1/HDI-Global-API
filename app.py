@@ -170,20 +170,65 @@ def premium():
     user = get_user_by_key(key)
 
     if not user:
-        return jsonify({"error": "Invalid key"}), 403
+        return """
+        <html><body style="font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;">
+        <h1>Invalid API Key</h1>
+        <p>Please create an HDI account first.</p>
+        <a href="/" style="color:#38bdf8;">Go back</a>
+        </body></html>
+        """
 
     if not is_premium(user[4], user[5]):
-        return jsonify({
-            "locked": True,
-            "preview": "High-profit opportunity detected...",
-            "payment": f"{BASE_URL}/hdi/pay?key={key}"
-        }), 403
+        return f"""
+        <html>
+        <head>
+            <title>HDI Signal Locked</title>
+            <style>
+                body {{ font-family: Arial; background:#050816; color:white; text-align:center; padding:60px; }}
+                .card {{ max-width:720px; margin:auto; background:#111827; padding:40px; border-radius:18px; }}
+                .pay {{ background:#16a34a; padding:15px 25px; border-radius:10px; color:white; text-decoration:none; display:inline-block; margin-top:20px; }}
+                .preview {{ color:#38bdf8; font-weight:bold; }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>🔒 HDI Intelligence Signal Locked</h1>
+                <p class="preview">High-profit opportunity detected in East Africa</p>
+                <p>Sector Hint: Agriculture Export</p>
+                <p>Estimated Margin: 18% - 27%</p>
+                <p>Confidence Score: Locked</p>
+                <p>Urgency Window: Locked</p>
+                <h3>Unlock full signal for {PAY_AMOUNT} {PAY_CURRENCY}/month</h3>
+                <a class="pay" href="/hdi/pay?key={key}">Upgrade Now 💰</a>
+            </div>
+        </body>
+        </html>
+        """
 
-    return jsonify({
-        "signal": "🔥 Premium opportunity",
-        "margin": "20%",
-        "urgency": "HIGH"
-    })
+    return """
+    <html>
+    <head>
+        <title>Premium HDI Signal</title>
+        <style>
+            body { font-family:Arial; background:#050816; color:white; text-align:center; padding:60px; }
+            .card { max-width:720px; margin:auto; background:#111827; padding:40px; border-radius:18px; }
+            .hot { color:#38bdf8; font-weight:bold; }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h1>🔥 Premium HDI Signal</h1>
+            <p class="hot">Country: Tanzania</p>
+            <p>Sector: Agriculture Export</p>
+            <p>Opportunity: Coffee and food export demand rising across East Africa</p>
+            <p>Estimated Margin: 18% - 27%</p>
+            <p>Confidence: 91%</p>
+            <p>Urgency: HIGH</p>
+            <p>Window: Next 7 days</p>
+        </div>
+    </body>
+    </html>
+    """
 
 @app.route("/hdi/pay")
 def pay():
