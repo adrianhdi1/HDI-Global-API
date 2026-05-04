@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, redirect
 import uuid
 import os
 import requests
@@ -260,7 +260,11 @@ def pay():
         "amount": PAY_AMOUNT,
         "currency": PAY_CURRENCY,
         "redirect_url": f"{BASE_URL}/hdi/verify-payment",
-        "customer": {"email": user[2], "name": user[1]}
+        "customer": {"email": user[2], "name": user[1]},
+        "customizations": {
+            "title": "HDI Premium Access",
+            "description": "Unlock full HDI intelligence signals"
+        }
     }
 
     res = requests.post(
@@ -269,7 +273,12 @@ def pay():
         headers=headers
     )
 
-    return jsonify(res.json())
+    data = res.json()
+
+    if data.get("status") == "success":
+        return redirect(data["data"]["link"])
+
+    return jsonify(data)
 
 @app.route("/hdi/webhook", methods=["POST"])
 def webhook():
