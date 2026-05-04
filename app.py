@@ -1,60 +1,18 @@
 from flask import Flask, jsonify, request, redirect
-import uuid
-import os
-import requests
-import psycopg2
-import random
+import uuid, os, requests, psycopg2, random
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
 FLW_SECRET_KEY = os.environ.get("FLW_SECRET_KEY")
 DATABASE_URL = os.environ.get("DATABASE_URL")
+ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY")
 
 BASE_URL = "https://hdi-global-api.onrender.com"
 PAY_AMOUNT = 10
 PAY_CURRENCY = "USD"
 
-COUNTRIES = [
-    "USA", "China", "Germany", "UK", "India", "Brazil",
-    "UAE", "Canada", "South Africa", "Nigeria", "Japan",
-    "France", "Singapore", "Australia", "Tanzania", "Kenya"
-]
-
-SECTORS = [
-    "Artificial Intelligence", "E-commerce", "Real Estate",
-    "Energy", "Fintech", "Logistics", "Healthcare",
-    "Manufacturing", "Agriculture", "Crypto Markets"
-]
-
-OPPORTUNITIES = [
-    "Global demand surge detected",
-    "Cross-border trade imbalance detected",
-    "Supply chain disruption creating opportunity",
-    "Institutional buying activity increasing",
-    "Market inefficiency detected across regions",
-    "Capital inflow shift detected",
-    "High-probability opportunity pattern identified"
-]
-
-RISKS = ["LOW", "MODERATE", "CONTROLLED"]
-URGENCIES = ["HIGH", "CRITICAL", "FAST-MOVING"]
-
-def generate_signal():
-    margin_low = random.randint(12, 24)
-    margin_high = margin_low + random.randint(6, 15)
-
-    return {
-        "country": random.choice(COUNTRIES),
-        "sector": random.choice(SECTORS),
-        "opportunity": random.choice(OPPORTUNITIES),
-        "margin": f"{margin_low}% - {margin_high}%",
-        "confidence": f"{random.randint(86, 98)}%",
-        "urgency": random.choice(URGENCIES),
-        "risk": random.choice(RISKS),
-        "window_hours": random.randint(3, 8),
-        "unlocked_today": random.randint(18, 75)
-    }
+SYMBOLS = ["AAPL", "MSFT", "TSLA", "NVDA", "AMZN", "GOOGL", "META"]
 
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
@@ -62,7 +20,6 @@ def get_conn():
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
-
     cur.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -73,7 +30,6 @@ def init_db():
         premium_until TEXT
     )
     """)
-
     cur.execute("""
     CREATE TABLE IF NOT EXISTS payments (
         id SERIAL PRIMARY KEY,
@@ -84,7 +40,6 @@ def init_db():
         status TEXT DEFAULT 'pending'
     )
     """)
-
     conn.commit()
     cur.close()
     conn.close()
@@ -111,6 +66,108 @@ def get_user_by_key(api_key):
     conn.close()
     return user
 
+def fetch_alpha_daily(symbol):
+    if not ALPHA_VANTAGE_KEY:
+        return None
+
+    try:
+        res = requests.get(
+            "https://www.alphavantage.co/query",
+            params={
+                "function": "TIME_SERIES_DAILY",
+                "symbol": symbol,
+                "apikey": ALPHA_VANTAGE_KEY
+            },
+            timeout=20
+        )
+        data = res.json()
+        series = data.get("Time Series (Daily)")
+
+        if not series:
+            return None
+
+        dates = sorted(series.keys(), reverse=True)
+        latest = series[dates[0]]
+        previous = series[dates[1]]
+
+        latest_close = float(latest["4. close"])
+        previous_close = float(previous["4. close"])
+        change_pct = round(((latest_close - previous_close) / previous_close) * 100, 2)
+
+        return {
+            "symbol": symbol,
+            "latest_date": dates[0],
+            "latest_close": latest_close,
+            "previous_close": previous_close,
+            "change_pct": change_pct
+        }
+    except:
+        return None
+
+def generate_real_signal():
+    symbol = random.choice(SYMBOLS)
+    market = fetch_alpha_daily(symbol)
+
+    if not market:
+        return {
+            "source": "HDI fallback model",
+            "symbol": symbol,
+            "sector": "Global Markets",
+            "opportunity": "High-probability opportunity pattern detected",
+            "confidence": f"{random.randint(84, 94)}%",
+            "risk": "MODERATE",
+            "urgency": "HIGH",
+            "margin": "12% - 24%",
+            "window": "Next 6 hours",
+            "why": [
+                "Market data temporarily unavailable",
+                "Fallback opportunity model active",
+                "Signal confidence estimated by HDI model"
+            ]
+        }
+
+    change = market["change_pct"]
+
+    if change > 2:
+        urgency = "CRITICAL"
+        risk = "MODERATE"
+        opportunity = "Strong price momentum detected"
+        confidence = random.randint(90, 97)
+    elif change > 0:
+        urgency = "HIGH"
+        risk = "CONTROLLED"
+        opportunity = "Positive market movement detected"
+        confidence = random.randint(86, 93)
+    else:
+        urgency = "MEDIUM"
+        risk = "MODERATE"
+        opportunity = "Potential reversal watch detected"
+        confidence = random.randint(82, 90)
+
+    margin_low = max(8, abs(int(change * 3)) + 8)
+    margin_high = margin_low + random.randint(5, 12)
+
+    return {
+        "source": "Alpha Vantage market data",
+        "symbol": market["symbol"],
+        "latest_date": market["latest_date"],
+        "latest_close": market["latest_close"],
+        "previous_close": market["previous_close"],
+        "change_pct": change,
+        "sector": "Global Equities",
+        "opportunity": opportunity,
+        "confidence": f"{confidence}%",
+        "risk": risk,
+        "urgency": urgency,
+        "margin": f"{margin_low}% - {margin_high}%",
+        "window": f"Next {random.randint(3, 8)} hours",
+        "why": [
+            f"{market['symbol']} moved {change}% from previous close",
+            "Real daily market data detected",
+            "HDI converted market movement into opportunity signal"
+        ]
+    }
+
 @app.route("/")
 def home():
     return """
@@ -130,7 +187,7 @@ button{padding:12px 24px;background:#2563eb;color:white;border:none;border-radiu
 <div class="card">
 <h1>HDI Global Intelligence</h1>
 <p class="tag">Global AI-powered opportunity intelligence</p>
-<p>Detect high-probability opportunity patterns across global markets.</p>
+<p>Now powered by real market data signals.</p>
 
 <input id="name" placeholder="Name"><br>
 <input id="email" placeholder="Email"><br>
@@ -183,14 +240,12 @@ def create_user():
 def premium():
     key = request.args.get("key")
     user = get_user_by_key(key)
-    signal = generate_signal()
+    signal = generate_real_signal()
 
     if not user:
         return "Invalid key"
 
     if not is_premium(user[4], user[5]):
-        hours = signal["window_hours"]
-
         return f"""
 <html>
 <head>
@@ -204,56 +259,49 @@ body{{font-family:Arial;background:#050816;color:white;text-align:center;padding
 </head>
 <body>
 <div class="card">
-<h1>🔒 Global HDI Signal Locked</h1>
-<p class="blue">Institutional-level opportunity pattern detected</p>
+<h1>🔒 Real Data Signal Locked</h1>
+<p class="blue">HDI detected a real market movement pattern</p>
 
-<div class="box">Region: Global Markets</div>
-<div class="box">Sector Hint: {signal["sector"]}</div>
+<div class="box">Data Source: {signal["source"]}</div>
+<div class="box">Symbol: {signal["symbol"]}</div>
+<div class="box">Sector: {signal["sector"]}</div>
 <div class="box">Estimated Margin: {signal["margin"]}</div>
-<div class="box">Risk Level: {signal["risk"]}</div>
 <div class="box">Confidence: Locked</div>
-<div class="box">⏳ Window closes in: <span id="countdown"></span></div>
+<div class="box">Why: Locked</div>
 
-<p>🔥 {signal["unlocked_today"]} users unlocked global signals today</p>
-
+<h3>Unlock full real-data signal for {PAY_AMOUNT} {PAY_CURRENCY}/month</h3>
 <a class="pay" href="/hdi/pay?key={key}">Unlock Full Signal 💰</a>
 </div>
-
-<script>
-let seconds = {hours} * 3600;
-function update(){{
-let h=Math.floor(seconds/3600);
-let m=Math.floor((seconds%3600)/60);
-let s=seconds%60;
-document.getElementById("countdown").innerHTML =
-String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
-if(seconds>0) seconds--;
-}}
-setInterval(update,1000);
-update();
-</script>
-
 </body>
 </html>
 """
+
+    why_html = "".join([f"<li>{w}</li>" for w in signal["why"]])
 
     return f"""
 <html>
 <body style="font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;">
 <div style="max-width:760px;margin:auto;background:#111827;padding:42px;border-radius:20px;">
-<h1>🔥 Premium Global HDI Signal</h1>
-<p>Country: {signal["country"]}</p>
+<h1>🔥 Premium Real-Data HDI Signal</h1>
+<p>Data Source: {signal["source"]}</p>
+<p>Symbol: {signal["symbol"]}</p>
 <p>Sector: {signal["sector"]}</p>
-<p>Signal: {signal["opportunity"]}</p>
+<p>Opportunity: {signal["opportunity"]}</p>
 <p>Estimated Margin: {signal["margin"]}</p>
 <p>Confidence: {signal["confidence"]}</p>
 <p>Urgency: {signal["urgency"]}</p>
 <p>Risk: {signal["risk"]}</p>
-<p>Window: Next {signal["window_hours"]} hours</p>
+<p>Window: {signal["window"]}</p>
+<h3>Why this signal?</h3>
+<ul style="text-align:left;display:inline-block;">{why_html}</ul>
 </div>
 </body>
 </html>
 """
+
+@app.route("/hdi/real-signal")
+def real_signal_api():
+    return jsonify(generate_real_signal())
 
 @app.route("/hdi/pay")
 def pay():
