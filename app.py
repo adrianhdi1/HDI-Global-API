@@ -82,61 +82,21 @@ def home():
 <head>
     <title>HDI Intelligence</title>
     <style>
-        body {
-            font-family: Arial;
-            background: #050816;
-            color: white;
-            text-align: center;
-            padding: 60px;
-        }
-        .card {
-            max-width: 700px;
-            margin: auto;
-            background: #111827;
-            padding: 40px;
-            border-radius: 18px;
-        }
-        input {
-            padding: 12px;
-            margin: 8px;
-            width: 80%;
-            border-radius: 8px;
-            border: none;
-        }
-        button {
-            padding: 12px 24px;
-            background: #2563eb;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            margin-top: 10px;
-            cursor: pointer;
-        }
-        .pay {
-            background: #16a34a;
-            padding: 12px 20px;
-            border-radius: 10px;
-            text-decoration: none;
-            color: white;
-            display: inline-block;
-            margin-top: 15px;
-        }
-        .result {
-            margin-top: 20px;
-            color: #38bdf8;
-        }
+        body { font-family: Arial; background: #050816; color: white; text-align: center; padding: 60px; }
+        .card { max-width: 700px; margin: auto; background: #111827; padding: 40px; border-radius: 18px; }
+        input { padding: 12px; margin: 8px; width: 80%; border-radius: 8px; border: none; }
+        button { padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 10px; margin-top: 10px; cursor: pointer; }
+        .pay { background: #16a34a; padding: 12px 20px; border-radius: 10px; text-decoration: none; color: white; display: inline-block; margin-top: 15px; }
+        .result { margin-top: 20px; color: #38bdf8; }
     </style>
 </head>
 <body>
     <div class="card">
         <h1>HDI Intelligence</h1>
         <p>AI-powered opportunity signals for Africa</p>
-
         <input id="name" placeholder="Your Name"><br>
         <input id="email" placeholder="Your Email"><br>
-
         <button onclick="createUser()">Get Access</button>
-
         <div id="result" class="result"></div>
     </div>
 
@@ -323,6 +283,30 @@ def admin():
         "premium": premium,
         "revenue": revenue
     })
+
+@app.route("/hdi/leads")
+def leads():
+    if request.args.get("key") != ADMIN_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("SELECT name, email, plan FROM users ORDER BY id DESC LIMIT 50")
+    rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    data = []
+    for r in rows:
+        data.append({
+            "name": r[0],
+            "email": r[1],
+            "plan": r[2]
+        })
+
+    return jsonify(data)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
