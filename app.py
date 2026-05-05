@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 app = Flask(__name__)
 
 FLW_SECRET_KEY = os.environ.get("FLW_SECRET_KEY")
-FLW_SECRET_HASH = os.environ.get("FLW_SECRET_HASH")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY")
 ADMIN_KEY = os.environ.get("ADMIN_KEY")
@@ -47,9 +46,6 @@ def init_db():
     conn.close()
 
 init_db()
-
-def premium_expiry():
-    return (datetime.utcnow() + timedelta(days=30)).isoformat()
 
 def is_premium(plan, premium_until):
     if plan != "premium" or not premium_until:
@@ -120,11 +116,11 @@ def generate_decision_signal():
 
     if market:
         change = market["change_pct"]
-        source = "Alpha Vantage market data"
+        source = "Alpha Vantage Market Data"
         latest_date = market["latest_date"]
     else:
         change = round(random.uniform(-2.5, 3.5), 2)
-        source = "HDI fallback decision model"
+        source = "HDI Fallback Decision Model"
         latest_date = "Recent"
 
     if change > 2:
@@ -132,13 +128,13 @@ def generate_decision_signal():
         urgency = "CRITICAL"
         risk = "MODERATE"
         score = random.randint(88, 96)
-        summary = "Strong upward momentum detected. HDI identifies a high-probability opportunity pattern."
+        summary = "Strong upward momentum detected. HDI identifies a high-probability institutional opportunity pattern."
     elif change > 0:
         action = "MONITOR CLOSELY"
         urgency = "HIGH"
         risk = "CONTROLLED"
         score = random.randint(76, 87)
-        summary = "Positive market movement detected. Market conditions show controlled growth potential."
+        summary = "Positive movement detected. Market conditions show controlled growth potential."
     else:
         action = "WAIT"
         urgency = "MEDIUM"
@@ -156,8 +152,8 @@ def generate_decision_signal():
         "change": change,
         "sector": "Global Equities",
         "market_score": score,
-        "recommended_action": action,
-        "ai_summary": summary,
+        "strategic_action": action,
+        "intelligence_brief": summary,
         "confidence": f"{score}%",
         "urgency": urgency,
         "risk": risk,
@@ -169,6 +165,11 @@ def generate_decision_signal():
             "Signal converted into decision intelligence"
         ]
     }
+
+def confidence_bar(score):
+    filled = int(score / 10)
+    empty = 10 - filled
+    return "█" * filled + "░" * empty
 
 def track_record_html():
     rows = ""
@@ -186,90 +187,189 @@ def track_record_html():
 
         rows += f"""
         <div class="box">
-            <b>{symbol}</b> →
-            <span style="color:{color};font-weight:bold;">{sign}{change}%</span>
+            <b>{symbol}</b><br>
+            <span style="color:{color};font-size:22px;font-weight:bold;">{sign}{change}%</span>
             <br><small>{date}</small>
         </div>
         """
     return rows
 
+def base_style():
+    return """
+    <style>
+    body{
+        margin:0;
+        font-family:Arial, sans-serif;
+        background:linear-gradient(135deg,#020617,#0f172a,#111827);
+        color:white;
+        text-align:center;
+    }
+    .container{
+        max-width:980px;
+        margin:auto;
+        padding:60px 20px;
+    }
+    .card{
+        background:rgba(17,24,39,0.92);
+        border:1px solid rgba(56,189,248,0.18);
+        box-shadow:0 0 50px rgba(0,0,0,0.45);
+        padding:42px;
+        border-radius:24px;
+        margin-bottom:24px;
+    }
+    .institution{
+        color:#38bdf8;
+        font-weight:bold;
+        letter-spacing:1px;
+        text-transform:uppercase;
+        font-size:13px;
+    }
+    h1{
+        font-size:42px;
+        margin-bottom:12px;
+    }
+    h2{
+        color:#e5e7eb;
+    }
+    p{
+        color:#cbd5e1;
+        line-height:1.6;
+    }
+    input{
+        padding:14px;
+        margin:8px;
+        width:80%;
+        border-radius:10px;
+        border:1px solid #334155;
+        background:#020617;
+        color:white;
+    }
+    button,.btn,.pay{
+        display:inline-block;
+        padding:14px 26px;
+        border-radius:12px;
+        border:none;
+        text-decoration:none;
+        color:white;
+        font-weight:bold;
+        margin-top:12px;
+        cursor:pointer;
+    }
+    button,.btn{
+        background:#2563eb;
+    }
+    .pay{
+        background:#16a34a;
+    }
+    .box{
+        background:#0b1220;
+        border:1px solid rgba(148,163,184,0.16);
+        padding:18px;
+        margin:12px;
+        border-radius:14px;
+        text-align:left;
+    }
+    .grid{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:12px;
+    }
+    .blue{
+        color:#38bdf8;
+        font-weight:bold;
+    }
+    .gold{
+        color:#facc15;
+        font-weight:bold;
+    }
+    .muted{
+        color:#94a3b8;
+        font-size:14px;
+    }
+    .metric{
+        font-size:30px;
+        font-weight:bold;
+        color:#38bdf8;
+    }
+    </style>
+    """
+
 @app.route("/")
 def home():
-    return """
+    return f"""
 <html>
 <head>
 <title>HDI Global Intelligence</title>
-<style>
-body{font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;}
-.card{max-width:780px;margin:auto;background:#111827;padding:42px;border-radius:20px;}
-input{padding:12px;margin:8px;width:80%;border-radius:8px;border:none;}
-button{padding:12px 24px;background:#2563eb;color:white;border:none;border-radius:10px;font-weight:bold;margin-top:8px;}
-.tag{color:#38bdf8;font-weight:bold;}
-.small{color:#94a3b8;font-size:14px;}
-</style>
+{base_style()}
 </head>
 <body>
-<div class="card">
-<h1>HDI Global Intelligence</h1>
-<p class="tag">Decision Intelligence powered by real market data</p>
-<p>Signals. Market Score. Recommended Action. AI Summary.</p>
+<div class="container">
+    <div class="card">
+        <div class="institution">Private Beta Access</div>
+        <h1>HDI Global Intelligence</h1>
+        <p class="blue">Decision Intelligence System for Investors, Institutions & Strategic Decision Makers</p>
+        <p>
+            HDI converts real market data into strategic decisions:
+            Market Score, Strategic Action, Risk Level, Intelligence Brief, and Track Record.
+        </p>
 
-<h3>Create Account</h3>
-<input id="name" placeholder="Name"><br>
-<input id="email" placeholder="Email"><br>
-<button onclick="createUser()">Get Access</button>
+        <h2>Create Access</h2>
+        <input id="name" placeholder="Full Name"><br>
+        <input id="email" placeholder="Email Address"><br>
+        <button onclick="createUser()">Enter HDI</button>
 
-<hr style="margin:35px;border-color:#1f2937;">
+        <hr style="margin:35px;border-color:#1f2937;">
 
-<h3>Login</h3>
-<p class="small">Already have an account? Enter your email.</p>
-<input id="login_email" placeholder="Your Email"><br>
-<button onclick="loginUser()">Login</button>
+        <h2>Login</h2>
+        <p class="muted">Already have access? Enter your email.</p>
+        <input id="login_email" placeholder="Email Address"><br>
+        <button onclick="loginUser()">Login</button>
 
-<div id="result" style="margin-top:25px;color:#38bdf8;"></div>
+        <div id="result" style="margin-top:25px;color:#38bdf8;"></div>
+    </div>
 </div>
 
 <script>
-function goDashboard(api_key){
+function goDashboard(api_key){{
     window.location.href = "/hdi/dashboard?key=" + api_key;
-}
+}}
 
-async function createUser(){
+async function createUser(){{
     let name=document.getElementById("name").value;
     let email=document.getElementById("email").value;
 
-    let res=await fetch("/hdi/create-user",{
+    let res=await fetch("/hdi/create-user",{{
         method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({name,email})
-    });
+        headers:{{"Content-Type":"application/json"}},
+        body:JSON.stringify({{name,email}})
+    }});
 
     let data=await res.json();
 
-    if(data.api_key){
+    if(data.api_key){{
         goDashboard(data.api_key);
-    } else {
+    }} else {{
         document.getElementById("result").innerHTML="Error: "+JSON.stringify(data);
-    }
-}
+    }}
+}}
 
-async function loginUser(){
+async function loginUser(){{
     let email=document.getElementById("login_email").value;
 
-    let res=await fetch("/hdi/login",{
+    let res=await fetch("/hdi/login",{{
         method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({email})
-    });
+        headers:{{"Content-Type":"application/json"}},
+        body:JSON.stringify({{email}})
+    }});
 
     let data=await res.json();
 
-    if(data.api_key){
+    if(data.api_key){{
         goDashboard(data.api_key);
-    } else {
+    }} else {{
         document.getElementById("result").innerHTML="Login error: "+JSON.stringify(data);
-    }
-}
+    }}
+}}
 </script>
 </body>
 </html>
@@ -326,44 +426,42 @@ def dashboard():
         return "Invalid access"
 
     premium_active = is_premium(user[4], user[5])
-    status = "Premium Active ✅" if premium_active else "Free Plan 🔒"
-    upgrade_button = "" if premium_active else f"<a class='pay' href='/hdi/pay?key={key}'>Upgrade Now 💰</a>"
+    status = "Institutional Premium Active ✅" if premium_active else "Private Beta / Free Access 🔒"
+    access_button = f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>" if not premium_active else ""
     records = track_record_html()
 
     return f"""
 <html>
 <head>
 <title>HDI Dashboard</title>
-<style>
-body{{font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;}}
-.card{{max-width:900px;margin:auto;background:#111827;padding:42px;border-radius:20px;}}
-.box{{background:#0b1220;padding:15px;margin:12px;border-radius:12px;text-align:left;}}
-.pay{{background:#16a34a;padding:15px 25px;border-radius:10px;color:white;text-decoration:none;display:inline-block;margin-top:20px;font-weight:bold;}}
-.btn{{background:#2563eb;padding:15px 25px;border-radius:10px;color:white;text-decoration:none;display:inline-block;margin-top:20px;font-weight:bold;}}
-.blue{{color:#38bdf8;font-weight:bold;}}
-.grid{{display:grid;grid-template-columns:1fr 1fr;gap:10px;}}
-</style>
+{base_style()}
 </head>
 <body>
-<div class="card">
-<h1>HDI Decision Dashboard</h1>
-<p class="blue">Welcome, {user[1]}</p>
+<div class="container">
+    <div class="card">
+        <div class="institution">HDI Decision Terminal</div>
+        <h1>Strategic Intelligence Dashboard</h1>
+        <p class="blue">Welcome, {user[1]}</p>
+        <p>HDI is built for investors, institutions, companies, banks, and high-level decision makers.</p>
 
-<div class="box"><b>Email:</b> {user[2]}</div>
-<div class="box"><b>Plan:</b> {status}</div>
-<div class="box"><b>API Key:</b> {user[3]}</div>
-<div class="box"><b>Premium Until:</b> {user[5] if user[5] else "Not active"}</div>
+        <div class="grid">
+            <div class="box"><b>Email</b><br>{user[2]}</div>
+            <div class="box"><b>Access Status</b><br>{status}</div>
+            <div class="box"><b>Access Key</b><br>{user[3]}</div>
+            <div class="box"><b>Premium Until</b><br>{user[5] if user[5] else "Not active"}</div>
+        </div>
 
-<a class="btn" href="/hdi/premium-alerts?key={key}">View Decision Signal</a>
-{upgrade_button}
+        <a class="btn" href="/hdi/premium-alerts?key={key}">Open Decision Signal</a>
+        {access_button}
+    </div>
 
-<hr style="margin:35px;border-color:#1f2937;">
-<h2>📊 Recent Signal Track Record</h2>
-<p class="blue">Recent market movement proof from real data layer</p>
-<div class="grid">{records}</div>
+    <div class="card">
+        <h2>📊 Signal Track Record</h2>
+        <p class="blue">Recent market movement proof from the real data layer</p>
+        <div class="grid">{records}</div>
+    </div>
 
-<br><br>
-<a href="/" style="color:#94a3b8;">Logout</a>
+    <a href="/" class="muted">Logout</a>
 </div>
 </body>
 </html>
@@ -379,29 +477,42 @@ def premium():
     if not user:
         return "Invalid key"
 
+    score_bar = confidence_bar(signal["market_score"])
+
     if not is_premium(user[4], user[5]):
         return f"""
 <html>
-<body style="font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;">
-<div style="max-width:860px;margin:auto;background:#111827;padding:42px;border-radius:20px;">
-<h1>🔒 Decision Intelligence Locked</h1>
-<p style="color:#38bdf8;font-weight:bold;">HDI detected a decision pattern from real market data</p>
+<head>
+<title>HDI Locked Signal</title>
+{base_style()}
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <div class="institution">Decision Intelligence Locked</div>
+        <h1>Strategic Signal Detected</h1>
+        <p class="blue">HDI detected a decision pattern from real market data.</p>
 
-<div style="background:#0b1220;padding:15px;margin:12px;border-radius:12px;text-align:left;">Data Source: {signal["source"]}</div>
-<div style="background:#0b1220;padding:15px;margin:12px;border-radius:12px;text-align:left;">Symbol: {signal["symbol"]}</div>
-<div style="background:#0b1220;padding:15px;margin:12px;border-radius:12px;text-align:left;">Market Activity Score: Locked</div>
-<div style="background:#0b1220;padding:15px;margin:12px;border-radius:12px;text-align:left;">Recommended Action: Locked</div>
-<div style="background:#0b1220;padding:15px;margin:12px;border-radius:12px;text-align:left;">AI Summary: Locked</div>
+        <div class="grid">
+            <div class="box"><b>Data Source</b><br>{signal["source"]}</div>
+            <div class="box"><b>Symbol</b><br>{signal["symbol"]}</div>
+            <div class="box"><b>Market Activity Score</b><br>Locked</div>
+            <div class="box"><b>Strategic Action</b><br>Locked</div>
+            <div class="box"><b>Confidence Level</b><br>Locked</div>
+            <div class="box"><b>Market Intelligence Brief</b><br>Locked</div>
+        </div>
 
-<h3>Unlock full decision intelligence for {PAY_AMOUNT} {PAY_CURRENCY}/month</h3>
-<a href="/hdi/pay?key={key}" style="background:#16a34a;padding:15px 25px;border-radius:10px;color:white;text-decoration:none;">Unlock Full Decision 💰</a>
+        <h2>Request Institutional Access</h2>
+        <p>Access is currently limited to early institutional users and private beta testers.</p>
+        <a class="pay" href="/hdi/request-access?key={key}">Request Access</a>
+    </div>
 
-<hr style="margin:35px;border-color:#1f2937;">
-<h2>📊 Track Record Preview</h2>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">{records}</div>
+    <div class="card">
+        <h2>📊 Track Record Preview</h2>
+        <div class="grid">{records}</div>
+    </div>
 
-<br><br>
-<a href="/hdi/dashboard?key={key}" style="color:#94a3b8;">Back to Dashboard</a>
+    <a href="/hdi/dashboard?key={key}" class="muted">Back to Dashboard</a>
 </div>
 </body>
 </html>
@@ -411,32 +522,72 @@ def premium():
 
     return f"""
 <html>
-<body style="font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;">
-<div style="max-width:860px;margin:auto;background:#111827;padding:42px;border-radius:20px;">
-<h1>🔥 HDI Decision Signal</h1>
+<head>
+<title>HDI Decision Signal</title>
+{base_style()}
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <div class="institution">Premium Decision Intelligence</div>
+        <h1>🔥 HDI Strategic Signal</h1>
 
-<p><b>Data Source:</b> {signal["source"]}</p>
-<p><b>Symbol:</b> {signal["symbol"]}</p>
-<p><b>Market Activity Score:</b> {signal["market_score"]}/100</p>
-<p><b>Recommended Action:</b> {signal["recommended_action"]}</p>
-<p><b>Confidence:</b> {signal["confidence"]}</p>
-<p><b>Urgency:</b> {signal["urgency"]}</p>
-<p><b>Risk:</b> {signal["risk"]}</p>
-<p><b>Estimated Margin:</b> {signal["margin"]}</p>
-<p><b>Window:</b> {signal["window"]}</p>
+        <div class="grid">
+            <div class="box"><b>Data Source</b><br>{signal["source"]}</div>
+            <div class="box"><b>Symbol</b><br>{signal["symbol"]}</div>
+            <div class="box"><b>Market Activity Score</b><br><span class="metric">{signal["market_score"]}/100</span></div>
+            <div class="box"><b>Strategic Action</b><br><span class="gold">{signal["strategic_action"]}</span></div>
+            <div class="box"><b>Confidence Level</b><br>{score_bar} {signal["confidence"]}</div>
+            <div class="box"><b>Urgency</b><br>{signal["urgency"]}</div>
+            <div class="box"><b>Risk</b><br>{signal["risk"]}</div>
+            <div class="box"><b>Estimated Margin</b><br>{signal["margin"]}</div>
+        </div>
 
-<h3>AI Summary</h3>
-<p>{signal["ai_summary"]}</p>
+        <h2>Market Intelligence Brief</h2>
+        <p>{signal["intelligence_brief"]}</p>
 
-<h3>Why this signal?</h3>
-<ul style="text-align:left;display:inline-block;">{why_html}</ul>
+        <h2>Why This Signal?</h2>
+        <ul style="text-align:left;display:inline-block;">{why_html}</ul>
+    </div>
 
-<hr style="margin:35px;border-color:#1f2937;">
-<h2>📊 Recent Track Record</h2>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">{records}</div>
+    <div class="card">
+        <h2>📊 Recent Track Record</h2>
+        <div class="grid">{records}</div>
+    </div>
 
-<br><br>
-<a href="/hdi/dashboard?key={key}" style="color:#94a3b8;">Back to Dashboard</a>
+    <a href="/hdi/dashboard?key={key}" class="muted">Back to Dashboard</a>
+</div>
+</body>
+</html>
+"""
+
+@app.route("/hdi/request-access")
+def request_access():
+    key = request.args.get("key")
+    user = get_user_by_key(key)
+
+    if not user:
+        return "Invalid key"
+
+    return f"""
+<html>
+<head>
+<title>Request HDI Access</title>
+{base_style()}
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <div class="institution">Private Beta Request</div>
+        <h1>Institutional Access Requested</h1>
+        <p class="blue">Thank you, {user[1]}.</p>
+        <p>
+            HDI Premium is currently in private beta while payment activation is being completed.
+            Your access request has been recorded internally.
+        </p>
+        <p class="muted">Email: {user[2]}</p>
+        <a class="btn" href="/hdi/dashboard?key={key}">Return to Dashboard</a>
+    </div>
 </div>
 </body>
 </html>
@@ -449,52 +600,7 @@ def real_signal_api():
 @app.route("/hdi/pay")
 def pay():
     key = request.args.get("key")
-    user = get_user_by_key(key)
-
-    if not user:
-        return jsonify({"error": "Invalid key"}), 403
-
-    tx_ref = "HDI-" + uuid.uuid4().hex[:12]
-
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO payments(api_key,tx_ref,amount,currency) VALUES(%s,%s,%s,%s)",
-        (key, tx_ref, PAY_AMOUNT, PAY_CURRENCY)
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    headers = {
-        "Authorization": f"Bearer {FLW_SECRET_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "tx_ref": tx_ref,
-        "amount": PAY_AMOUNT,
-        "currency": PAY_CURRENCY,
-        "redirect_url": f"{BASE_URL}/hdi/dashboard?key={key}",
-        "customer": {"email": user[2], "name": user[1]},
-        "customizations": {
-            "title": "HDI Global Premium",
-            "description": "Unlock global decision intelligence"
-        }
-    }
-
-    res = requests.post(
-        "https://api.flutterwave.com/v3/payments",
-        json=payload,
-        headers=headers
-    )
-
-    data = res.json()
-
-    if data.get("status") == "success":
-        return redirect(data["data"]["link"])
-
-    return jsonify(data)
+    return redirect(f"/hdi/request-access?key={key}")
 
 @app.route("/hdi/admin")
 def admin():
