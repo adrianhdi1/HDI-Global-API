@@ -316,6 +316,45 @@ def generate_decision_signal(symbol=None, api_key=None):
         }
     }
 
+def generate_ranked_signals(api_key=None, limit=5):
+    ranked = []
+
+    for symbol in SYMBOLS:
+        signal = generate_decision_signal(symbol=symbol, api_key=api_key)
+        ranked.append(signal)
+
+    ranked = sorted(
+        ranked,
+        key=lambda x: (
+            x["market_score"],
+            x["factors"]["relevance_score"],
+            x["factors"]["momentum_score"]
+        ),
+        reverse=True
+    )
+
+    return ranked[:limit]
+
+def ranked_signals_html(api_key):
+    signals = generate_ranked_signals(api_key)
+    html = ""
+    rank = 1
+
+    for s in signals:
+        html += f"""
+        <div class="box">
+            <b>#{rank} — {s["symbol"]}</b><br>
+            Pattern: {s["pattern"]}<br>
+            Score: <span class="metric">{s["market_score"]}/100</span><br>
+            Priority: <span class="gold">{s["priority"]}</span><br>
+            HDI Recommendation: {s["recommendation"]}<br>
+            <span class="muted">Strategic Action: 🔒 Locked</span>
+        </div>
+        """
+        rank += 1
+
+    return html
+
 def save_signal(api_key, signal):
     market = fetch_alpha_daily(signal["symbol"])
     entry_price = market["latest_close"] if market else 0
@@ -471,8 +510,8 @@ def home():
 <div class="card">
 <div class="institution">Private Beta Access</div>
 <h1>HDI Global Intelligence</h1>
-<p class="blue">Multi-Factor Adaptive Decision Intelligence System</p>
-<p>HDI analyzes momentum, volatility, trend strength, user relevance, and feedback outcomes.</p>
+<p class="blue">Live Multi-Factor Adaptive Decision Intelligence System</p>
+<p>HDI analyzes momentum, volatility, trend strength, user relevance, signal ranking, and feedback outcomes.</p>
 
 <h2>Create Access</h2>
 <input id="name" placeholder="Full Name"><br>
@@ -557,20 +596,31 @@ def dashboard():
     accuracy = signal_accuracy_html()
     watchlist = watchlist_html(key)
     behavior = get_behavior_summary(key)
+    ranked_signals = ranked_signals_html(key)
 
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active ✅" if premium_active else "Private Beta / Free Access 🔒"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
 
     return f"""
-<html><head><title>HDI Dashboard</title>{base_style()}</head>
+<html>
+<head>
+<title>HDI Dashboard</title>
+{base_style()}
+<script>
+setTimeout(function(){{
+    window.location.reload();
+}}, 60000);
+</script>
+</head>
 <body><div class="container">
 
 <div class="card">
-<div class="institution">HDI Multi-Factor Terminal</div>
+<div class="institution">HDI Live Multi-Factor Terminal</div>
 <h1>Adaptive Intelligence Dashboard</h1>
 <p class="blue">Welcome, {user[1]}</p>
 <p>{behavior}</p>
+<p class="muted">Live mode: dashboard refreshes every 60 seconds.</p>
 <div class="grid">
 <div class="box"><b>Email</b><br>{user[2]}</div>
 <div class="box"><b>Status</b><br>{status}</div>
@@ -579,6 +629,13 @@ def dashboard():
 </div>
 <a class="btn" href="/hdi/premium-alerts?key={key}">Open Multi-Factor Signal</a>
 {access_button}
+</div>
+
+<div class="card">
+<div class="institution">Live Signal Ranking</div>
+<h2>🔥 Top Ranked Signals</h2>
+<p class="blue">HDI ranks signals using momentum, volatility, trend strength, and user relevance.</p>
+<div class="grid">{ranked_signals}</div>
 </div>
 
 <div class="card">
@@ -787,6 +844,11 @@ def request_access():
 def real_signal_api():
     key = request.args.get("key")
     return jsonify(generate_decision_signal(api_key=key))
+
+@app.route("/hdi/ranked-signals")
+def ranked_signals_api():
+    key = request.args.get("user_key")
+    return jsonify(generate_ranked_signals(key))
 
 @app.route("/hdi/feedback-loop")
 def feedback_loop():
