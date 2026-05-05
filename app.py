@@ -318,10 +318,8 @@ def generate_decision_signal(symbol=None, api_key=None):
 
 def generate_ranked_signals(api_key=None, limit=5):
     ranked = []
-
     for symbol in SYMBOLS:
-        signal = generate_decision_signal(symbol=symbol, api_key=api_key)
-        ranked.append(signal)
+        ranked.append(generate_decision_signal(symbol=symbol, api_key=api_key))
 
     ranked = sorted(
         ranked,
@@ -332,7 +330,6 @@ def generate_ranked_signals(api_key=None, limit=5):
         ),
         reverse=True
     )
-
     return ranked[:limit]
 
 def ranked_signals_html(api_key):
@@ -352,7 +349,6 @@ def ranked_signals_html(api_key):
         </div>
         """
         rank += 1
-
     return html
 
 def save_signal(api_key, signal):
@@ -838,6 +834,110 @@ def request_access():
 <p>Your access request is now in the private beta queue.</p>
 <a class="btn" href="/hdi/dashboard?key={key}">Return to Dashboard</a>
 </div></div></body></html>
+"""
+
+@app.route("/hdi/admin-panel")
+def admin_panel():
+    if request.args.get("key") != ADMIN_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("SELECT COUNT(*) FROM users")
+    users = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM access_requests")
+    requests_count = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM user_behavior")
+    behavior_events = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM signal_history")
+    signals_saved = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM signal_history WHERE result='SUCCESS'")
+    success = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM signal_history WHERE result IN ('SUCCESS','FAILED')")
+    resolved = cur.fetchone()[0]
+
+    accuracy = round((success / resolved) * 100) if resolved else 0
+
+    cur.execute("SELECT name,email,api_key,created_at FROM access_requests ORDER BY id DESC LIMIT 10")
+    requests_rows = cur.fetchall()
+
+    cur.execute("SELECT api_key,symbol,action,count FROM user_behavior ORDER BY count DESC LIMIT 10")
+    behavior_rows = cur.fetchall()
+
+    cur.execute("""
+        SELECT symbol, action, score, result, created_at
+        FROM signal_history
+        ORDER BY id DESC
+        LIMIT 10
+    """)
+    signal_rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    requests_html = "".join([
+        f"<div class='box'><b>{r[0]}</b><br>{r[1]}<br><small>{r[3]}</small></div>"
+        for r in requests_rows
+    ])
+
+    behavior_html = "".join([
+        f"<div class='box'><b>{r[1]}</b><br>Action: {r[2]}<br>Count: {r[3]}</div>"
+        for r in behavior_rows
+    ])
+
+    signals_html = "".join([
+        f"<div class='box'><b>{r[0]}</b><br>{r[1]}<br>Score: {r[2]}<br>Result: {r[3]}<br><small>{r[4]}</small></div>"
+        for r in signal_rows
+    ])
+
+    return f"""
+<html>
+<head>
+<title>HDI Admin Panel</title>
+{base_style()}
+</head>
+<body>
+<div class="container">
+
+<div class="card">
+<div class="institution">HDI Founder Control Center</div>
+<h1>Admin Panel</h1>
+<p class="blue">System overview, users, behavior, signals, and feedback accuracy.</p>
+
+<div class="grid">
+<div class="box"><b>Total Users</b><br><span class="metric">{users}</span></div>
+<div class="box"><b>Access Requests</b><br><span class="metric">{requests_count}</span></div>
+<div class="box"><b>Behavior Events</b><br><span class="metric">{behavior_events}</span></div>
+<div class="box"><b>Signals Saved</b><br><span class="metric">{signals_saved}</span></div>
+<div class="box"><b>Resolved Signals</b><br><span class="metric">{resolved}</span></div>
+<div class="box"><b>Feedback Accuracy</b><br><span class="metric">{accuracy}%</span></div>
+</div>
+</div>
+
+<div class="card">
+<h2>📩 Latest Access Requests</h2>
+<div class="grid">{requests_html if requests_html else "<p class='muted'>No requests yet.</p>"}</div>
+</div>
+
+<div class="card">
+<h2>🧠 User Behavior</h2>
+<div class="grid">{behavior_html if behavior_html else "<p class='muted'>No behavior data yet.</p>"}</div>
+</div>
+
+<div class="card">
+<h2>📊 Latest Signals</h2>
+<div class="grid">{signals_html if signals_html else "<p class='muted'>No signals yet.</p>"}</div>
+</div>
+
+</div>
+</body>
+</html>
 """
 
 @app.route("/hdi/real-signal")
