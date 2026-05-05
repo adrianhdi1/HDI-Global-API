@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 app = Flask(__name__)
 
 FLW_SECRET_KEY = os.environ.get("FLW_SECRET_KEY")
+FLW_SECRET_HASH = os.environ.get("FLW_SECRET_HASH")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY")
 ADMIN_KEY = os.environ.get("ADMIN_KEY")
@@ -21,6 +22,7 @@ def get_conn():
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -31,6 +33,7 @@ def init_db():
         premium_until TEXT
     )
     """)
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS payments (
         id SERIAL PRIMARY KEY,
@@ -41,6 +44,17 @@ def init_db():
         status TEXT DEFAULT 'pending'
     )
     """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS access_requests (
+        id SERIAL PRIMARY KEY,
+        name TEXT,
+        email TEXT,
+        api_key TEXT,
+        created_at TEXT
+    )
+    """)
+
     conn.commit()
     cur.close()
     conn.close()
@@ -159,6 +173,7 @@ def generate_decision_signal():
         "risk": risk,
         "margin": f"{margin_low}% - {margin_high}%",
         "window": f"Next {random.randint(3, 8)} hours",
+        "micro_result": f"{symbol} moved {change}% from previous close",
         "why": [
             f"{symbol} moved {change}% from previous close",
             "HDI analyzed real market movement",
@@ -224,17 +239,9 @@ def base_style():
         text-transform:uppercase;
         font-size:13px;
     }
-    h1{
-        font-size:42px;
-        margin-bottom:12px;
-    }
-    h2{
-        color:#e5e7eb;
-    }
-    p{
-        color:#cbd5e1;
-        line-height:1.6;
-    }
+    h1{font-size:42px;margin-bottom:12px;}
+    h2{color:#e5e7eb;}
+    p{color:#cbd5e1;line-height:1.6;}
     input{
         padding:14px;
         margin:8px;
@@ -255,12 +262,8 @@ def base_style():
         margin-top:12px;
         cursor:pointer;
     }
-    button,.btn{
-        background:#2563eb;
-    }
-    .pay{
-        background:#16a34a;
-    }
+    button,.btn{background:#2563eb;}
+    .pay{background:#16a34a;}
     .box{
         background:#0b1220;
         border:1px solid rgba(148,163,184,0.16);
@@ -274,23 +277,11 @@ def base_style():
         grid-template-columns:1fr 1fr;
         gap:12px;
     }
-    .blue{
-        color:#38bdf8;
-        font-weight:bold;
-    }
-    .gold{
-        color:#facc15;
-        font-weight:bold;
-    }
-    .muted{
-        color:#94a3b8;
-        font-size:14px;
-    }
-    .metric{
-        font-size:30px;
-        font-weight:bold;
-        color:#38bdf8;
-    }
+    .blue{color:#38bdf8;font-weight:bold;}
+    .gold{color:#facc15;font-weight:bold;}
+    .muted{color:#94a3b8;font-size:14px;}
+    .metric{font-size:30px;font-weight:bold;color:#38bdf8;}
+    .locked{filter:blur(3px);opacity:.55;}
     </style>
     """
 
@@ -425,6 +416,7 @@ def dashboard():
     if not user:
         return "Invalid access"
 
+    signal = generate_decision_signal()
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active ✅" if premium_active else "Private Beta / Free Access 🔒"
     access_button = f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>" if not premium_active else ""
@@ -453,6 +445,21 @@ def dashboard():
 
         <a class="btn" href="/hdi/premium-alerts?key={key}">Open Decision Signal</a>
         {access_button}
+    </div>
+
+    <div class="card">
+        <div class="institution">Today’s HDI Signal</div>
+        <h2>Daily Signal Drop</h2>
+        <p class="blue">Partial intelligence preview available for private beta users.</p>
+
+        <div class="grid">
+            <div class="box"><b>Symbol</b><br>{signal["symbol"]}</div>
+            <div class="box"><b>Market Score</b><br><span class="metric">{signal["market_score"]}/100</span></div>
+            <div class="box"><b>Strategic Action</b><br><span class="gold">{signal["strategic_action"]}</span></div>
+            <div class="box"><b>Micro Result</b><br>{signal["micro_result"]}</div>
+        </div>
+
+        <p class="muted">Full intelligence brief, timing window, and risk breakdown remain restricted.</p>
     </div>
 
     <div class="card">
@@ -489,22 +496,31 @@ def premium():
 <body>
 <div class="container">
     <div class="card">
-        <div class="institution">Decision Intelligence Locked</div>
+        <div class="institution">Private Beta Signal Preview</div>
         <h1>Strategic Signal Detected</h1>
         <p class="blue">HDI detected a decision pattern from real market data.</p>
 
         <div class="grid">
             <div class="box"><b>Data Source</b><br>{signal["source"]}</div>
             <div class="box"><b>Symbol</b><br>{signal["symbol"]}</div>
-            <div class="box"><b>Market Activity Score</b><br>Locked</div>
-            <div class="box"><b>Strategic Action</b><br>Locked</div>
-            <div class="box"><b>Confidence Level</b><br>Locked</div>
-            <div class="box"><b>Market Intelligence Brief</b><br>Locked</div>
+            <div class="box"><b>Market Activity Score</b><br><span class="metric">{signal["market_score"]}/100</span></div>
+            <div class="box"><b>Strategic Action</b><br><span class="gold">{signal["strategic_action"]}</span></div>
+            <div class="box"><b>Micro Result</b><br>{signal["micro_result"]}</div>
+            <div class="box"><b>Confidence Level</b><br>Partial Preview</div>
+        </div>
+
+        <hr style="margin:35px;border-color:#1f2937;">
+
+        <div class="grid">
+            <div class="box locked"><b>Full Intelligence Brief</b><br>{signal["intelligence_brief"]}</div>
+            <div class="box locked"><b>Timing Window</b><br>{signal["window"]}</div>
+            <div class="box locked"><b>Risk Breakdown</b><br>{signal["risk"]}</div>
+            <div class="box locked"><b>Why This Signal?</b><br>Real-data reasoning locked</div>
         </div>
 
         <h2>Request Institutional Access</h2>
-        <p>Access is currently limited to early institutional users and private beta testers.</p>
-        <a class="pay" href="/hdi/request-access?key={key}">Request Access</a>
+        <p>Limited access is maintained to protect signal quality, system performance, and institutional-grade analysis.</p>
+        <a class="pay" href="/hdi/request-access?key={key}">Request Institutional Access</a>
     </div>
 
     <div class="card">
@@ -569,6 +585,19 @@ def request_access():
     if not user:
         return "Invalid key"
 
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO access_requests(name,email,api_key,created_at) VALUES(%s,%s,%s,%s)",
+            (user[1], user[2], key, datetime.utcnow().isoformat())
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except:
+        pass
+
     return f"""
 <html>
 <head>
@@ -579,13 +608,18 @@ def request_access():
 <div class="container">
     <div class="card">
         <div class="institution">Private Beta Request</div>
-        <h1>Institutional Access Requested</h1>
+        <h1>Institutional Access Request Recorded</h1>
         <p class="blue">Thank you, {user[1]}.</p>
         <p>
-            HDI Premium is currently in private beta while payment activation is being completed.
-            Your access request has been recorded internally.
+            HDI Premium is currently in restricted deployment.
+            Access is granted selectively to maintain signal quality, system performance,
+            and institutional-grade decision intelligence.
         </p>
-        <p class="muted">Email: {user[2]}</p>
+
+        <div class="box"><b>Name</b><br>{user[1]}</div>
+        <div class="box"><b>Email</b><br>{user[2]}</div>
+
+        <p class="gold">Your request is now in the private beta queue.</p>
         <a class="btn" href="/hdi/dashboard?key={key}">Return to Dashboard</a>
     </div>
 </div>
@@ -616,13 +650,17 @@ def admin():
     cur.execute("SELECT COUNT(*) FROM users WHERE plan='premium'")
     premium = cur.fetchone()[0]
 
-    cur.execute("SELECT COALESCE(SUM(amount),0) FROM payments")
-    revenue = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM access_requests")
+    requests_count = cur.fetchone()[0]
 
     cur.close()
     conn.close()
 
-    return jsonify({"users": users, "premium": premium, "revenue": revenue})
+    return jsonify({
+        "users": users,
+        "premium": premium,
+        "access_requests": requests_count
+    })
 
 @app.route("/hdi/leads")
 def leads():
@@ -638,5 +676,23 @@ def leads():
 
     return jsonify([{"name": r[0], "email": r[1], "plan": r[2]} for r in rows])
 
+@app.route("/hdi/access-requests")
+def access_requests():
+    if request.args.get("key") != ADMIN_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT name,email,api_key,created_at FROM access_requests ORDER BY id DESC LIMIT 50")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return jsonify([
+        {"name": r[0], "email": r[1], "api_key": r[2], "created_at": r[3]}
+        for r in rows
+    ])
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
