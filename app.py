@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request, redirect
 import uuid, os, requests, psycopg2, random
-from datetime import datetime, timedelta
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -46,6 +46,14 @@ def init_db():
 
 init_db()
 
+def is_premium(plan, premium_until):
+    if plan != "premium" or not premium_until:
+        return False
+    try:
+        return datetime.fromisoformat(premium_until) > datetime.utcnow()
+    except:
+        return False
+
 def get_user_by_email(email):
     conn = get_conn()
     cur = conn.cursor()
@@ -64,14 +72,6 @@ def get_user_by_key(api_key):
     conn.close()
     return user
 
-def is_premium(plan, premium_until):
-    if plan != "premium" or not premium_until:
-        return False
-    try:
-        return datetime.fromisoformat(premium_until) > datetime.utcnow()
-    except:
-        return False
-
 def fetch_alpha_daily(symbol):
     if not ALPHA_VANTAGE_KEY:
         return None
@@ -84,11 +84,10 @@ def fetch_alpha_daily(symbol):
                 "symbol": symbol,
                 "apikey": ALPHA_VANTAGE_KEY
             },
-            timeout=20
+            timeout=15
         )
         data = res.json()
         series = data.get("Time Series (Daily)")
-
         if not series:
             return None
 
@@ -182,10 +181,9 @@ def home():
 <title>HDI Global Intelligence</title>
 <style>
 body{font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;}
-.card{max-width:760px;margin:auto;background:#111827;padding:42px;border-radius:20px;}
+.card{max-width:780px;margin:auto;background:#111827;padding:42px;border-radius:20px;}
 input{padding:12px;margin:8px;width:80%;border-radius:8px;border:none;}
 button{padding:12px 24px;background:#2563eb;color:white;border:none;border-radius:10px;font-weight:bold;margin-top:8px;}
-.pay{background:#16a34a;padding:12px 20px;border-radius:10px;color:white;text-decoration:none;display:inline-block;margin-top:15px;}
 .tag{color:#38bdf8;font-weight:bold;}
 .small{color:#94a3b8;font-size:14px;}
 </style>
@@ -204,7 +202,7 @@ button{padding:12px 24px;background:#2563eb;color:white;border:none;border-radiu
 <hr style="margin:35px;border-color:#1f2937;">
 
 <h3>Login</h3>
-<p class="small">Already have an account? Enter your email to recover your access key.</p>
+<p class="small">Already have an account? Enter your email.</p>
 <input id="login_email" placeholder="Your Email"><br>
 <button onclick="loginUser()">Login</button>
 
@@ -212,11 +210,8 @@ button{padding:12px 24px;background:#2563eb;color:white;border:none;border-radiu
 </div>
 
 <script>
-function showAccess(api_key){
-    document.getElementById("result").innerHTML =
-    "<strong>Your Key:</strong> "+api_key+
-    "<br><br><a href='/hdi/premium-alerts?key="+api_key+"'>View Global Signals</a>"+
-    "<br><br><a class='pay' href='/hdi/pay?key="+api_key+"'>Upgrade Now 💰</a>";
+function goDashboard(api_key){
+    window.location.href = "/hdi/dashboard?key=" + api_key;
 }
 
 async function createUser(){
@@ -232,7 +227,7 @@ async function createUser(){
     let data=await res.json();
 
     if(data.api_key){
-        showAccess(data.api_key);
+        goDashboard(data.api_key);
     } else {
         document.getElementById("result").innerHTML="Error: "+JSON.stringify(data);
     }
@@ -250,7 +245,7 @@ async function loginUser(){
     let data=await res.json();
 
     if(data.api_key){
-        showAccess(data.api_key);
+        goDashboard(data.api_key);
     } else {
         document.getElementById("result").innerHTML="Login error: "+JSON.stringify(data);
     }
@@ -300,7 +295,6 @@ def login():
         return jsonify({"error": "email is required"}), 400
 
     user = get_user_by_email(email)
-
     if not user:
         return jsonify({"error": "No account found with this email"}), 404
 
@@ -310,6 +304,57 @@ def login():
         "plan": user[4],
         "premium_active": is_premium(user[4], user[5])
     })
+
+@app.route("/hdi/dashboard")
+def dashboard():
+    key = request.args.get("key")
+    user = get_user_by_key(key)
+
+    if not user:
+        return """
+        <html><body style="font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;">
+        <h1>Invalid Access</h1>
+        <p>Please login again.</p>
+        <a href="/" style="color:#38bdf8;">Go Home</a>
+        </body></html>
+        """
+
+    premium_active = is_premium(user[4], user[5])
+    status = "Premium Active ✅" if premium_active else "Free Plan 🔒"
+    upgrade_button = "" if premium_active else f"<a class='pay' href='/hdi/pay?key={key}'>Upgrade Now 💰</a>"
+
+    return f"""
+<html>
+<head>
+<title>HDI Dashboard</title>
+<style>
+body{{font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;}}
+.card{{max-width:820px;margin:auto;background:#111827;padding:42px;border-radius:20px;}}
+.box{{background:#0b1220;padding:15px;margin:12px;border-radius:12px;text-align:left;}}
+.pay{{background:#16a34a;padding:15px 25px;border-radius:10px;color:white;text-decoration:none;display:inline-block;margin-top:20px;font-weight:bold;}}
+.btn{{background:#2563eb;padding:15px 25px;border-radius:10px;color:white;text-decoration:none;display:inline-block;margin-top:20px;font-weight:bold;}}
+.blue{{color:#38bdf8;font-weight:bold;}}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>HDI User Dashboard</h1>
+<p class="blue">Welcome, {user[1]}</p>
+
+<div class="box"><b>Email:</b> {user[2]}</div>
+<div class="box"><b>Plan:</b> {status}</div>
+<div class="box"><b>API Key:</b> {user[3]}</div>
+<div class="box"><b>Premium Until:</b> {user[5] if user[5] else "Not active"}</div>
+
+<a class="btn" href="/hdi/premium-alerts?key={key}">View Signals</a>
+{upgrade_button}
+
+<br><br>
+<a href="/" style="color:#94a3b8;">Logout</a>
+</div>
+</body>
+</html>
+"""
 
 @app.route("/hdi/premium-alerts")
 def premium():
@@ -335,6 +380,8 @@ def premium():
 <p>Why: Locked</p>
 <h3>Unlock full real-data signal for {PAY_AMOUNT} {PAY_CURRENCY}/month</h3>
 <a href="/hdi/pay?key={key}" style="background:#16a34a;padding:15px 25px;border-radius:10px;color:white;text-decoration:none;">Unlock Full Signal 💰</a>
+<br><br>
+<a href="/hdi/dashboard?key={key}" style="color:#94a3b8;">Back to Dashboard</a>
 </div>
 </body>
 </html>
@@ -358,6 +405,8 @@ def premium():
 <p>Window: {signal["window"]}</p>
 <h3>Why this signal?</h3>
 <ul style="text-align:left;display:inline-block;">{why_html}</ul>
+<br><br>
+<a href="/hdi/dashboard?key={key}" style="color:#94a3b8;">Back to Dashboard</a>
 </div>
 </body>
 </html>
@@ -396,7 +445,7 @@ def pay():
         "tx_ref": tx_ref,
         "amount": PAY_AMOUNT,
         "currency": PAY_CURRENCY,
-        "redirect_url": BASE_URL,
+        "redirect_url": f"{BASE_URL}/hdi/dashboard?key={key}",
         "customer": {"email": user[2], "name": user[1]},
         "customizations": {
             "title": "HDI Global Premium",
@@ -419,3 +468,4 @@ def pay():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
