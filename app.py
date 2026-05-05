@@ -46,16 +46,14 @@ def init_db():
 
 init_db()
 
-def premium_expiry():
-    return (datetime.utcnow() + timedelta(days=30)).isoformat()
-
-def is_premium(plan, premium_until):
-    if plan != "premium" or not premium_until:
-        return False
-    try:
-        return datetime.fromisoformat(premium_until) > datetime.utcnow()
-    except:
-        return False
+def get_user_by_email(email):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
+    return user
 
 def get_user_by_key(api_key):
     conn = get_conn()
@@ -65,6 +63,14 @@ def get_user_by_key(api_key):
     cur.close()
     conn.close()
     return user
+
+def is_premium(plan, premium_until):
+    if plan != "premium" or not premium_until:
+        return False
+    try:
+        return datetime.fromisoformat(premium_until) > datetime.utcnow()
+    except:
+        return False
 
 def fetch_alpha_daily(symbol):
     if not ALPHA_VANTAGE_KEY:
@@ -178,41 +184,76 @@ def home():
 body{font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;}
 .card{max-width:760px;margin:auto;background:#111827;padding:42px;border-radius:20px;}
 input{padding:12px;margin:8px;width:80%;border-radius:8px;border:none;}
-button{padding:12px 24px;background:#2563eb;color:white;border:none;border-radius:10px;font-weight:bold;}
+button{padding:12px 24px;background:#2563eb;color:white;border:none;border-radius:10px;font-weight:bold;margin-top:8px;}
 .pay{background:#16a34a;padding:12px 20px;border-radius:10px;color:white;text-decoration:none;display:inline-block;margin-top:15px;}
 .tag{color:#38bdf8;font-weight:bold;}
+.small{color:#94a3b8;font-size:14px;}
 </style>
 </head>
 <body>
 <div class="card">
 <h1>HDI Global Intelligence</h1>
 <p class="tag">Global AI-powered opportunity intelligence</p>
-<p>Now powered by real market data signals.</p>
+<p>Powered by real market data signals.</p>
 
+<h3>Create Account</h3>
 <input id="name" placeholder="Name"><br>
 <input id="email" placeholder="Email"><br>
 <button onclick="createUser()">Get Access</button>
 
-<div id="result"></div>
+<hr style="margin:35px;border-color:#1f2937;">
+
+<h3>Login</h3>
+<p class="small">Already have an account? Enter your email to recover your access key.</p>
+<input id="login_email" placeholder="Your Email"><br>
+<button onclick="loginUser()">Login</button>
+
+<div id="result" style="margin-top:25px;color:#38bdf8;"></div>
 </div>
 
 <script>
+function showAccess(api_key){
+    document.getElementById("result").innerHTML =
+    "<strong>Your Key:</strong> "+api_key+
+    "<br><br><a href='/hdi/premium-alerts?key="+api_key+"'>View Global Signals</a>"+
+    "<br><br><a class='pay' href='/hdi/pay?key="+api_key+"'>Upgrade Now 💰</a>";
+}
+
 async function createUser(){
-let name=document.getElementById("name").value;
-let email=document.getElementById("email").value;
+    let name=document.getElementById("name").value;
+    let email=document.getElementById("email").value;
 
-let res=await fetch("/hdi/create-user",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({name,email})
-});
+    let res=await fetch("/hdi/create-user",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({name,email})
+    });
 
-let data=await res.json();
+    let data=await res.json();
 
-document.getElementById("result").innerHTML=
-"<br><strong>Your Key:</strong> "+data.api_key+
-"<br><br><a href='/hdi/premium-alerts?key="+data.api_key+"'>View Global Signals</a>"+
-"<br><br><a class='pay' href='/hdi/pay?key="+data.api_key+"'>Upgrade Now 💰</a>";
+    if(data.api_key){
+        showAccess(data.api_key);
+    } else {
+        document.getElementById("result").innerHTML="Error: "+JSON.stringify(data);
+    }
+}
+
+async function loginUser(){
+    let email=document.getElementById("login_email").value;
+
+    let res=await fetch("/hdi/login",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({email})
+    });
+
+    let data=await res.json();
+
+    if(data.api_key){
+        showAccess(data.api_key);
+    } else {
+        document.getElementById("result").innerHTML="Login error: "+JSON.stringify(data);
+    }
 }
 </script>
 </body>
@@ -221,20 +262,54 @@ document.getElementById("result").innerHTML=
 
 @app.route("/hdi/create-user", methods=["POST"])
 def create_user():
-    data = request.get_json()
+    data = request.get_json() or {}
+    name = data.get("name")
+    email = data.get("email")
+
+    if not name or not email:
+        return jsonify({"error": "name and email are required"}), 400
+
+    existing = get_user_by_email(email)
+    if existing:
+        return jsonify({
+            "message": "User already exists",
+            "api_key": existing[3],
+            "plan": existing[4]
+        })
+
     api_key = "HDI-" + uuid.uuid4().hex[:10].upper()
 
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO users(name,email,api_key) VALUES(%s,%s,%s)",
-        (data["name"], data["email"], api_key)
+        (name, email, api_key)
     )
     conn.commit()
     cur.close()
     conn.close()
 
-    return jsonify({"api_key": api_key})
+    return jsonify({"api_key": api_key, "plan": "free"})
+
+@app.route("/hdi/login", methods=["POST"])
+def login():
+    data = request.get_json() or {}
+    email = data.get("email")
+
+    if not email:
+        return jsonify({"error": "email is required"}), 400
+
+    user = get_user_by_email(email)
+
+    if not user:
+        return jsonify({"error": "No account found with this email"}), 404
+
+    return jsonify({
+        "message": "Login successful",
+        "api_key": user[3],
+        "plan": user[4],
+        "premium_active": is_premium(user[4], user[5])
+    })
 
 @app.route("/hdi/premium-alerts")
 def premium():
@@ -248,29 +323,18 @@ def premium():
     if not is_premium(user[4], user[5]):
         return f"""
 <html>
-<head>
-<style>
-body{{font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;}}
-.card{{max-width:760px;margin:auto;background:#111827;padding:42px;border-radius:20px;}}
-.box{{background:#0b1220;padding:15px;margin:10px;border-radius:10px;text-align:left;}}
-.pay{{background:#16a34a;padding:15px 25px;border-radius:10px;color:white;text-decoration:none;display:inline-block;margin-top:20px;font-weight:bold;}}
-.blue{{color:#38bdf8;font-weight:bold;}}
-</style>
-</head>
-<body>
-<div class="card">
+<body style="font-family:Arial;background:#050816;color:white;text-align:center;padding:60px;">
+<div style="max-width:760px;margin:auto;background:#111827;padding:42px;border-radius:20px;">
 <h1>🔒 Real Data Signal Locked</h1>
-<p class="blue">HDI detected a real market movement pattern</p>
-
-<div class="box">Data Source: {signal["source"]}</div>
-<div class="box">Symbol: {signal["symbol"]}</div>
-<div class="box">Sector: {signal["sector"]}</div>
-<div class="box">Estimated Margin: {signal["margin"]}</div>
-<div class="box">Confidence: Locked</div>
-<div class="box">Why: Locked</div>
-
+<p style="color:#38bdf8;font-weight:bold;">HDI detected a real market movement pattern</p>
+<p>Data Source: {signal["source"]}</p>
+<p>Symbol: {signal["symbol"]}</p>
+<p>Sector: {signal["sector"]}</p>
+<p>Estimated Margin: {signal["margin"]}</p>
+<p>Confidence: Locked</p>
+<p>Why: Locked</p>
 <h3>Unlock full real-data signal for {PAY_AMOUNT} {PAY_CURRENCY}/month</h3>
-<a class="pay" href="/hdi/pay?key={key}">Unlock Full Signal 💰</a>
+<a href="/hdi/pay?key={key}" style="background:#16a34a;padding:15px 25px;border-radius:10px;color:white;text-decoration:none;">Unlock Full Signal 💰</a>
 </div>
 </body>
 </html>
@@ -307,6 +371,9 @@ def real_signal_api():
 def pay():
     key = request.args.get("key")
     user = get_user_by_key(key)
+
+    if not user:
+        return jsonify({"error": "Invalid key"}), 403
 
     tx_ref = "HDI-" + uuid.uuid4().hex[:12]
 
