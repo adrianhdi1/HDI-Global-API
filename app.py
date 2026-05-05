@@ -85,6 +85,7 @@ def is_premium(plan, premium_until):
 def fetch_alpha_daily(symbol):
     if not ALPHA_VANTAGE_KEY:
         return None
+
     try:
         res = requests.get(
             "https://www.alphavantage.co/query",
@@ -106,14 +107,19 @@ def fetch_alpha_daily(symbol):
 
         latest_close = float(latest["4. close"])
         previous_close = float(previous["4. close"])
+        latest_high = float(latest["2. high"])
+        latest_low = float(latest["3. low"])
+
         change_pct = round(((latest_close - previous_close) / previous_close) * 100, 2)
+        volatility_pct = round(((latest_high - latest_low) / latest_close) * 100, 2)
 
         return {
             "symbol": symbol,
             "date": dates[0],
             "latest_close": latest_close,
             "previous_close": previous_close,
-            "change_pct": change_pct
+            "change_pct": change_pct,
+            "volatility_pct": volatility_pct
         }
     except:
         return None
@@ -129,10 +135,7 @@ def track_behavior(api_key, symbol, action):
         existing = cur.fetchone()
 
         if existing:
-            cur.execute(
-                "UPDATE user_behavior SET count=%s WHERE id=%s",
-                (existing[1] + 1, existing[0])
-            )
+            cur.execute("UPDATE user_behavior SET count=%s WHERE id=%s", (existing[1] + 1, existing[0]))
         else:
             cur.execute(
                 "INSERT INTO user_behavior(api_key,symbol,action,count) VALUES(%s,%s,%s,1)",
@@ -181,77 +184,124 @@ def get_behavior_summary(api_key):
 
     return "Adaptive focus: " + ", ".join([f"{r[0]} ({r[1]})" for r in rows])
 
-def generate_decision_signal(symbol=None):
-    symbol = symbol or random.choice(SYMBOLS)
+def calculate_multi_factor(symbol, change, volatility, is_preferred):
+    momentum_score = min(100, max(40, int(60 + change * 8)))
+    volatility_score = min(100, max(35, int(100 - volatility * 6)))
+    trend_strength = min(100, max(40, int(65 + abs(change) * 7)))
+    relevance_score = 95 if is_preferred else random.randint(55, 75)
+
+    final_score = int(
+        momentum_score * 0.35 +
+        volatility_score * 0.20 +
+        trend_strength * 0.25 +
+        relevance_score * 0.20
+    )
+
+    if final_score >= 88:
+        priority = "CRITICAL"
+    elif final_score >= 76:
+        priority = "HIGH"
+    elif final_score >= 64:
+        priority = "MEDIUM"
+    else:
+        priority = "LOW"
+
+    return {
+        "momentum_score": momentum_score,
+        "volatility_score": volatility_score,
+        "trend_strength": trend_strength,
+        "relevance_score": relevance_score,
+        "final_score": final_score,
+        "priority": priority
+    }
+
+def generate_decision_signal(symbol=None, api_key=None):
+    preferred = get_preferred_symbol(api_key) if api_key else None
+    symbol = symbol or preferred or random.choice(SYMBOLS)
     market = fetch_alpha_daily(symbol)
 
     if market:
         change = market["change_pct"]
+        volatility = market["volatility_pct"]
         source = "Alpha Vantage Market Data"
         date = market["date"]
     else:
         change = round(random.uniform(-2.5, 3.5), 2)
+        volatility = round(random.uniform(1.2, 4.8), 2)
         source = "HDI Adaptive Fallback Model"
         date = "Recent"
 
-    if change > 2:
-        action = "ENTER POSITION NOW"
-        urgency = "CRITICAL"
-        risk = "MODERATE"
-        score = random.randint(88, 96)
-        brief = "Strong momentum detected. HDI identifies a high-probability decision pattern."
-        pattern = "Momentum Breakout Pattern"
-    elif change > 0:
-        action = "MONITOR CLOSELY"
-        urgency = "HIGH"
-        risk = "CONTROLLED"
-        score = random.randint(76, 87)
-        brief = "Positive movement detected. Market behavior suggests controlled opportunity formation."
-        pattern = "Controlled Growth Pattern"
-    else:
-        action = "WAIT"
-        urgency = "MEDIUM"
-        risk = "MODERATE"
-        score = random.randint(60, 75)
-        brief = "Uncertainty detected. HDI recommends waiting for stronger confirmation."
-        pattern = "Reversal Watch Pattern"
+    factors = calculate_multi_factor(symbol, change, volatility, symbol == preferred)
 
-    expected_low = round(abs(change) * 0.8, 1)
-    expected_high = round(abs(change) * 1.8 + 1.5, 1)
+    score = factors["final_score"]
+    priority = factors["priority"]
+
+    if score >= 88 and change > 0:
+        action = "ENTER POSITION WITH CONTROLLED EXPOSURE"
+        exposure = "20% – 30%"
+        risk = "MODERATE"
+        pattern = "Multi-Factor Momentum Breakout"
+        brief = "HDI detects strong alignment between momentum, trend strength, and market relevance. This indicates a high-priority decision window."
+        recommendation = "HDI Recommendation: Consider entry within the next 2–4 hours while momentum remains active."
+    elif score >= 76:
+        action = "MONITOR CLOSELY"
+        exposure = "10% – 20%"
+        risk = "CONTROLLED"
+        pattern = "Adaptive Growth Pattern"
+        brief = "HDI detects improving conditions, but full confirmation is still developing. Monitoring is recommended before aggressive action."
+        recommendation = "HDI Recommendation: Monitor closely and wait for confirmation before increasing exposure."
+    elif score >= 64:
+        action = "WAIT FOR CONFIRMATION"
+        exposure = "0% – 10%"
+        risk = "MODERATE"
+        pattern = "Confirmation Pending Pattern"
+        brief = "HDI detects partial alignment, but not enough strength for a decisive move. Patience is preferred."
+        recommendation = "HDI Recommendation: Wait for stronger confirmation before taking action."
+    else:
+        action = "AVOID / STAND BY"
+        exposure = "0%"
+        risk = "ELEVATED"
+        pattern = "Weak Signal Pattern"
+        brief = "HDI detects weak market alignment. Current conditions do not justify action."
+        recommendation = "HDI Recommendation: Avoid action until stronger signals appear."
+
+    expected_low = round(abs(change) * 0.7 + 0.8, 1)
+    expected_high = round(abs(change) * 1.9 + 1.5, 1)
+
+    adaptive_note = (
+        f"Personalized signal based on your activity around {preferred}."
+        if preferred else
+        "General signal while HDI learns your behavior."
+    )
 
     return {
         "symbol": symbol,
         "source": source,
         "date": date,
         "change": change,
+        "volatility": volatility,
         "pattern": pattern,
         "market_score": score,
+        "priority": priority,
         "strategic_action": action,
-        "exposure": "20% – 30%" if change > 2 else "10% – 20%" if change > 0 else "0%",
+        "recommendation": recommendation,
+        "exposure": exposure,
         "entry_window": f"Next {random.randint(2,4)} hours",
         "expiry": f"{random.randint(4,8)} hours",
         "expected": f"+{expected_low}% to +{expected_high}%",
         "risk": risk,
-        "urgency": urgency,
         "confidence": f"{score}%",
         "intelligence_brief": brief,
-        "micro_result": f"{symbol} moved {change}% from previous close",
+        "adaptive_note": adaptive_note,
+        "micro_result": f"{symbol} moved {change}% with {volatility}% intraday volatility",
+        "factors": factors,
         "confidence_breakdown": {
-            "momentum": "Strong" if change > 1 else "Moderate",
-            "volume": "Confirmed",
-            "alignment": "Positive" if change > 0 else "Mixed"
+            "momentum": factors["momentum_score"],
+            "volatility": factors["volatility_score"],
+            "trend_strength": factors["trend_strength"],
+            "user_relevance": factors["relevance_score"]
         }
     }
-
-def generate_adaptive_signal(api_key):
-    preferred = get_preferred_symbol(api_key)
-    signal = generate_decision_signal(preferred)
-    signal["adaptive_note"] = (
-        f"Personalized signal based on your activity around {preferred}."
-        if preferred else
-        "General signal while HDI learns your behavior."
-    )
-    return signal
 
 def generate_insight_feed(api_key=None):
     preferred = get_preferred_symbol(api_key) if api_key else None
@@ -259,10 +309,10 @@ def generate_insight_feed(api_key=None):
     if preferred:
         return {
             "sector": f"{preferred} Focus",
-            "theme": "personalized market behavior pattern",
+            "theme": "personalized multi-factor behavior pattern",
             "impact": random.choice(["STRONG", "HIGH"]),
             "confidence": random.randint(78, 93),
-            "interpretation": f"HDI detected repeated interest in {preferred}. Your intelligence feed is now adapting toward this focus."
+            "interpretation": f"HDI detected repeated interest in {preferred}. Your intelligence feed is adapting toward this market behavior."
         }
 
     return {
@@ -321,7 +371,7 @@ def watchlist_html(api_key):
 
     html = ""
     for symbol in symbols:
-        signal = generate_decision_signal(symbol)
+        signal = generate_decision_signal(symbol, api_key)
         color = "#22c55e" if signal["change"] >= 0 else "#ef4444"
         sign = "+" if signal["change"] >= 0 else ""
 
@@ -330,6 +380,7 @@ def watchlist_html(api_key):
             <b>{symbol}</b><br>
             <span style="color:{color};font-size:22px;font-weight:bold;">{sign}{signal["change"]}%</span>
             <br><span class="muted">{signal["micro_result"]}</span>
+            <br><span class="muted">Priority: {signal["priority"]}</span>
             <br><span class="muted">Strategic Action: 🔒 Locked</span>
             <br><a href="/hdi/remove-watchlist?key={api_key}&symbol={symbol}" style="color:#ef4444;">Remove</a>
         </div>
@@ -363,8 +414,8 @@ def home():
 <div class="card">
 <div class="institution">Private Beta Access</div>
 <h1>HDI Global Intelligence</h1>
-<p class="blue">Adaptive Decision Intelligence System</p>
-<p>HDI learns user behavior and converts market data into personalized strategic intelligence.</p>
+<p class="blue">Multi-Factor Adaptive Decision Intelligence System</p>
+<p>HDI analyzes momentum, volatility, trend strength, and user relevance to produce personalized strategic intelligence.</p>
 
 <h2>Create Access</h2>
 <input id="name" placeholder="Full Name"><br>
@@ -443,7 +494,7 @@ def dashboard():
     if not user:
         return "Invalid access"
 
-    signal = generate_adaptive_signal(key)
+    signal = generate_decision_signal(api_key=key)
     insight = generate_insight_feed(key)
     performance = performance_tracking_html()
     watchlist = watchlist_html(key)
@@ -458,7 +509,7 @@ def dashboard():
 <body><div class="container">
 
 <div class="card">
-<div class="institution">HDI Adaptive Terminal</div>
+<div class="institution">HDI Multi-Factor Terminal</div>
 <h1>Adaptive Intelligence Dashboard</h1>
 <p class="blue">Welcome, {user[1]}</p>
 <p>{behavior}</p>
@@ -468,19 +519,21 @@ def dashboard():
 <div class="box"><b>Access Key</b><br>{user[3]}</div>
 <div class="box"><b>Premium Until</b><br>{user[5] if user[5] else "Not active"}</div>
 </div>
-<a class="btn" href="/hdi/premium-alerts?key={key}">Open Adaptive Decision Signal</a>
+<a class="btn" href="/hdi/premium-alerts?key={key}">Open Multi-Factor Signal</a>
 {access_button}
 </div>
 
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
-<h2>🧠 Adaptive Signal Engine</h2>
+<h2>🧠 Multi-Factor Signal Engine</h2>
 <p class="blue">{signal["adaptive_note"]}</p>
 <div class="grid">
 <div class="box"><b>Priority Symbol</b><br>{signal["symbol"]}</div>
 <div class="box"><b>Detected Pattern</b><br>{signal["pattern"]}</div>
 <div class="box"><b>Market Score</b><br><span class="metric">{signal["market_score"]}/100</span></div>
-<div class="box"><b>Strategic Action</b><br><span class="gold">{signal["strategic_action"]}</span></div>
+<div class="box"><b>Signal Priority</b><br><span class="gold">{signal["priority"]}</span></div>
+<div class="box"><b>HDI Recommendation</b><br>{signal["recommendation"]}</div>
+<div class="box"><b>Micro Result</b><br>{signal["micro_result"]}</div>
 </div>
 </div>
 
@@ -556,17 +609,18 @@ def premium():
     if not user:
         return "Invalid key"
 
-    signal = generate_adaptive_signal(key)
+    signal = generate_decision_signal(api_key=key)
     track_behavior(key, signal["symbol"], "signal_open")
     performance = performance_tracking_html()
 
     if not is_premium(user[4], user[5]):
+        f = signal["factors"]
         return f"""
 <html><head><title>HDI Signal</title>{base_style()}</head>
 <body><div class="container">
 
 <div class="card">
-<div class="institution">Adaptive Signal Preview</div>
+<div class="institution">Multi-Factor Signal Preview</div>
 <h1>Strategic Pattern Detected</h1>
 <p class="blue">{signal["adaptive_note"]}</p>
 
@@ -574,7 +628,9 @@ def premium():
 <div class="box"><b>Symbol</b><br>{signal["symbol"]}</div>
 <div class="box"><b>Pattern</b><br>{signal["pattern"]}</div>
 <div class="box"><b>Market Score</b><br><span class="metric">{signal["market_score"]}/100</span></div>
-<div class="box"><b>Strategic Action</b><br><span class="gold">{signal["strategic_action"]}</span></div>
+<div class="box"><b>Signal Priority</b><br><span class="gold">{signal["priority"]}</span></div>
+<div class="box"><b>Momentum Score</b><br>{f["momentum_score"]}/100</div>
+<div class="box"><b>Volatility Score</b><br>{f["volatility_score"]}/100</div>
 <div class="box locked"><b>Exposure</b><br>{signal["exposure"]}</div>
 <div class="box locked"><b>Entry Window</b><br>{signal["entry_window"]}</div>
 <div class="box locked"><b>Expected Opportunity</b><br>{signal["expected"]}</div>
@@ -596,29 +652,33 @@ def premium():
 <body><div class="container">
 
 <div class="card">
-<div class="institution">Premium Adaptive Intelligence</div>
-<h1>🔥 HDI Adaptive Strategic Decision</h1>
+<div class="institution">Premium Multi-Factor Intelligence</div>
+<h1>🔥 HDI Strategic Decision</h1>
 <p class="blue">{signal["adaptive_note"]}</p>
 
 <div class="grid">
 <div class="box"><b>Symbol</b><br>{signal["symbol"]}</div>
 <div class="box"><b>Pattern</b><br>{signal["pattern"]}</div>
 <div class="box"><b>Market Score</b><br><span class="metric">{signal["market_score"]}/100</span></div>
-<div class="box"><b>Strategic Action</b><br><span class="gold">{signal["strategic_action"]}</span></div>
+<div class="box"><b>Signal Priority</b><br><span class="gold">{signal["priority"]}</span></div>
+<div class="box"><b>Strategic Action</b><br>{signal["strategic_action"]}</div>
 <div class="box"><b>Exposure</b><br>{signal["exposure"]}</div>
 <div class="box"><b>Entry Window</b><br>{signal["entry_window"]}</div>
 <div class="box"><b>Expected Opportunity</b><br>{signal["expected"]}</div>
-<div class="box"><b>Risk</b><br>{signal["risk"]}</div>
 </div>
+
+<h2>HDI Recommendation</h2>
+<p>{signal["recommendation"]}</p>
 
 <h2>Intelligence Brief</h2>
 <p>{signal["intelligence_brief"]}</p>
 
-<h2>Confidence Breakdown</h2>
+<h2>Multi-Factor Breakdown</h2>
 <ul style="text-align:left;display:inline-block;">
-<li>Momentum: {cb["momentum"]}</li>
-<li>Volume: {cb["volume"]}</li>
-<li>Market Alignment: {cb["alignment"]}</li>
+<li>Momentum Score: {cb["momentum"]}/100</li>
+<li>Volatility Score: {cb["volatility"]}/100</li>
+<li>Trend Strength: {cb["trend_strength"]}/100</li>
+<li>User Relevance: {cb["user_relevance"]}/100</li>
 </ul>
 </div>
 
@@ -658,9 +718,7 @@ def request_access():
 @app.route("/hdi/real-signal")
 def real_signal_api():
     key = request.args.get("key")
-    if key:
-        return jsonify(generate_adaptive_signal(key))
-    return jsonify(generate_decision_signal())
+    return jsonify(generate_decision_signal(api_key=key))
 
 @app.route("/hdi/admin")
 def admin():
@@ -684,20 +742,6 @@ def admin():
         "behavior_events": behavior_events
     })
 
-@app.route("/hdi/access-requests")
-def access_requests():
-    if request.args.get("key") != ADMIN_KEY:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT name,email,api_key,created_at FROM access_requests ORDER BY id DESC LIMIT 50")
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    return jsonify([{"name": r[0], "email": r[1], "api_key": r[2], "created_at": r[3]} for r in rows])
-
 @app.route("/hdi/behavior")
 def behavior():
     if request.args.get("key") != ADMIN_KEY:
@@ -711,6 +755,20 @@ def behavior():
     conn.close()
 
     return jsonify([{"api_key": r[0], "symbol": r[1], "action": r[2], "count": r[3]} for r in rows])
+
+@app.route("/hdi/access-requests")
+def access_requests():
+    if request.args.get("key") != ADMIN_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT name,email,api_key,created_at FROM access_requests ORDER BY id DESC LIMIT 50")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return jsonify([{"name": r[0], "email": r[1], "api_key": r[2], "created_at": r[3]} for r in rows])
 
 @app.route("/hdi/pay")
 def pay():
