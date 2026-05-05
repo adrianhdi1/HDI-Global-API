@@ -50,6 +50,20 @@ def init_db():
         count INTEGER DEFAULT 1
     )""")
 
+    cur.execute("""CREATE TABLE IF NOT EXISTS signal_history (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        symbol TEXT,
+        action TEXT,
+        score INTEGER,
+        entry_price REAL,
+        current_price REAL,
+        expected TEXT,
+        result TEXT DEFAULT 'pending',
+        created_at TEXT,
+        checked_at TEXT
+    )""")
+
     conn.commit()
     cur.close()
     conn.close()
@@ -232,7 +246,6 @@ def generate_decision_signal(symbol=None, api_key=None):
         date = "Recent"
 
     factors = calculate_multi_factor(symbol, change, volatility, symbol == preferred)
-
     score = factors["final_score"]
     priority = factors["priority"]
 
@@ -303,6 +316,31 @@ def generate_decision_signal(symbol=None, api_key=None):
         }
     }
 
+def save_signal(api_key, signal):
+    market = fetch_alpha_daily(signal["symbol"])
+    entry_price = market["latest_close"] if market else 0
+
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO signal_history(api_key,symbol,action,score,entry_price,expected,created_at)
+            VALUES(%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            api_key,
+            signal["symbol"],
+            signal["strategic_action"],
+            signal["market_score"],
+            entry_price,
+            signal["expected"],
+            datetime.utcnow().isoformat()
+        ))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except:
+        pass
+
 def generate_insight_feed(api_key=None):
     preferred = get_preferred_symbol(api_key) if api_key else None
 
@@ -354,6 +392,25 @@ def performance_tracking_html():
 
     accuracy = round((wins / total) * 100) if total else 0
     return f"<p class='blue'>Recent Positive Movement Rate: {accuracy}%</p><div class='grid'>{rows}</div>"
+
+def signal_accuracy_html():
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM signal_history WHERE result='SUCCESS'")
+        success = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM signal_history WHERE result IN ('SUCCESS','FAILED')")
+        total = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+
+        if total == 0:
+            return "<p class='muted'>Signal outcome tracking is initializing. Results will appear after feedback checks.</p>"
+
+        accuracy = round((success / total) * 100)
+        return f"<p class='blue'>Closed Feedback Accuracy: {accuracy}%</p><p class='muted'>{success}/{total} resolved signals marked successful.</p>"
+    except:
+        return "<p class='muted'>Feedback accuracy unavailable.</p>"
 
 def get_watchlist(api_key):
     conn = get_conn()
@@ -415,7 +472,7 @@ def home():
 <div class="institution">Private Beta Access</div>
 <h1>HDI Global Intelligence</h1>
 <p class="blue">Multi-Factor Adaptive Decision Intelligence System</p>
-<p>HDI analyzes momentum, volatility, trend strength, and user relevance to produce personalized strategic intelligence.</p>
+<p>HDI analyzes momentum, volatility, trend strength, user relevance, and feedback outcomes.</p>
 
 <h2>Create Access</h2>
 <input id="name" placeholder="Full Name"><br>
@@ -497,6 +554,7 @@ def dashboard():
     signal = generate_decision_signal(api_key=key)
     insight = generate_insight_feed(key)
     performance = performance_tracking_html()
+    accuracy = signal_accuracy_html()
     watchlist = watchlist_html(key)
     behavior = get_behavior_summary(key)
 
@@ -535,6 +593,12 @@ def dashboard():
 <div class="box"><b>HDI Recommendation</b><br>{signal["recommendation"]}</div>
 <div class="box"><b>Micro Result</b><br>{signal["micro_result"]}</div>
 </div>
+</div>
+
+<div class="card">
+<div class="institution">Feedback Loop</div>
+<h2>🔁 Closed Learning System</h2>
+{accuracy}
 </div>
 
 <div class="card">
@@ -610,8 +674,10 @@ def premium():
         return "Invalid key"
 
     signal = generate_decision_signal(api_key=key)
+    save_signal(key, signal)
     track_behavior(key, signal["symbol"], "signal_open")
     performance = performance_tracking_html()
+    accuracy = signal_accuracy_html()
 
     if not is_premium(user[4], user[5]):
         f = signal["factors"]
@@ -640,6 +706,7 @@ def premium():
 <a class="pay" href="/hdi/request-access?key={key}">Request Institutional Access</a>
 </div>
 
+<div class="card"><h2>🔁 Feedback Accuracy</h2>{accuracy}</div>
 <div class="card"><h2>📊 Performance Preview</h2>{performance}</div>
 <a href="/hdi/dashboard?key={key}" class="muted">Back to Dashboard</a>
 </div></body></html>
@@ -682,6 +749,7 @@ def premium():
 </ul>
 </div>
 
+<div class="card"><h2>🔁 Feedback Accuracy</h2>{accuracy}</div>
 <div class="card"><h2>📊 Performance Tracking</h2>{performance}</div>
 <a href="/hdi/dashboard?key={key}" class="muted">Back to Dashboard</a>
 </div></body></html>
@@ -720,6 +788,100 @@ def real_signal_api():
     key = request.args.get("key")
     return jsonify(generate_decision_signal(api_key=key))
 
+@app.route("/hdi/feedback-loop")
+def feedback_loop():
+    if request.args.get("key") != ADMIN_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, symbol, action, entry_price
+        FROM signal_history
+        WHERE result='pending'
+        ORDER BY id DESC
+        LIMIT 50
+    """)
+    rows = cur.fetchall()
+
+    updated = 0
+
+    for r in rows:
+        signal_id, symbol, action, entry_price = r
+        market = fetch_alpha_daily(symbol)
+
+        if market and entry_price:
+            current_price = market["latest_close"]
+            change = ((current_price - entry_price) / entry_price) * 100
+
+            if "ENTER" in action and change > 0:
+                result = "SUCCESS"
+            elif "MONITOR" in action and change >= 0:
+                result = "SUCCESS"
+            elif "WAIT" in action and change <= 0:
+                result = "SUCCESS"
+            elif "AVOID" in action and change <= 0:
+                result = "SUCCESS"
+            else:
+                result = "FAILED"
+
+            cur.execute("""
+                UPDATE signal_history
+                SET current_price=%s, result=%s, checked_at=%s
+                WHERE id=%s
+            """, (
+                current_price,
+                result,
+                datetime.utcnow().isoformat(),
+                signal_id
+            ))
+
+            updated += 1
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return jsonify({
+        "updated_signals": updated,
+        "status": "feedback loop completed"
+    })
+
+@app.route("/hdi/signal-history")
+def signal_history():
+    if request.args.get("key") != ADMIN_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT symbol, action, score, entry_price, current_price, expected, result, created_at, checked_at
+        FROM signal_history
+        ORDER BY id DESC
+        LIMIT 50
+    """)
+
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return jsonify([
+        {
+            "symbol": r[0],
+            "action": r[1],
+            "score": r[2],
+            "entry_price": r[3],
+            "current_price": r[4],
+            "expected": r[5],
+            "result": r[6],
+            "created_at": r[7],
+            "checked_at": r[8]
+        }
+        for r in rows
+    ])
+
 @app.route("/hdi/admin")
 def admin():
     if request.args.get("key") != ADMIN_KEY:
@@ -733,13 +895,16 @@ def admin():
     requests_count = cur.fetchone()[0]
     cur.execute("SELECT COUNT(*) FROM user_behavior")
     behavior_events = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM signal_history")
+    signals = cur.fetchone()[0]
     cur.close()
     conn.close()
 
     return jsonify({
         "users": users,
         "access_requests": requests_count,
-        "behavior_events": behavior_events
+        "behavior_events": behavior_events,
+        "signals_saved": signals
     })
 
 @app.route("/hdi/behavior")
