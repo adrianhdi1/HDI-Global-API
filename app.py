@@ -55,6 +55,15 @@ def init_db():
     )
     """)
 
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS watchlist (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        symbol TEXT,
+        created_at TEXT
+    )
+    """)
+
     conn.commit()
     cur.close()
     conn.close()
@@ -90,7 +99,6 @@ def get_user_by_key(api_key):
 def fetch_alpha_daily(symbol):
     if not ALPHA_VANTAGE_KEY:
         return None
-
     try:
         res = requests.get(
             "https://www.alphavantage.co/query",
@@ -124,8 +132,8 @@ def fetch_alpha_daily(symbol):
     except:
         return None
 
-def generate_decision_signal():
-    symbol = random.choice(SYMBOLS)
+def generate_decision_signal(symbol=None):
+    symbol = symbol or random.choice(SYMBOLS)
     market = fetch_alpha_daily(symbol)
 
     if market:
@@ -186,6 +194,40 @@ def confidence_bar(score):
     empty = 10 - filled
     return "█" * filled + "░" * empty
 
+def get_watchlist(api_key):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT symbol FROM watchlist WHERE api_key=%s ORDER BY id DESC", (api_key,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [r[0] for r in rows]
+
+def watchlist_html(api_key):
+    symbols = get_watchlist(api_key)
+
+    if not symbols:
+        return """
+        <p class="muted">No watchlist yet. Add a symbol like AAPL, TSLA, NVDA.</p>
+        """
+
+    html = ""
+    for symbol in symbols:
+        signal = generate_decision_signal(symbol)
+        color = "#22c55e" if signal["change"] >= 0 else "#ef4444"
+        sign = "+" if signal["change"] >= 0 else ""
+
+        html += f"""
+        <div class="box">
+            <b>{symbol}</b><br>
+            <span style="color:{color};font-size:22px;font-weight:bold;">{sign}{signal["change"]}%</span>
+            <br><span class="muted">Mini Insight: {signal["micro_result"]}</span>
+            <br><span class="muted">Strategic Action: 🔒 Locked</span>
+            <br><a href="/hdi/remove-watchlist?key={api_key}&symbol={symbol}" style="color:#ef4444;">Remove</a>
+        </div>
+        """
+    return html
+
 def track_record_html():
     rows = ""
     for symbol in SYMBOLS[:5]:
@@ -242,7 +284,7 @@ def base_style():
     h1{font-size:42px;margin-bottom:12px;}
     h2{color:#e5e7eb;}
     p{color:#cbd5e1;line-height:1.6;}
-    input{
+    input,select{
         padding:14px;
         margin:8px;
         width:80%;
@@ -421,6 +463,7 @@ def dashboard():
     status = "Institutional Premium Active ✅" if premium_active else "Private Beta / Free Access 🔒"
     access_button = f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>" if not premium_active else ""
     records = track_record_html()
+    watchlist = watchlist_html(key)
 
     return f"""
 <html>
@@ -445,6 +488,28 @@ def dashboard():
 
         <a class="btn" href="/hdi/premium-alerts?key={key}">Open Decision Signal</a>
         {access_button}
+    </div>
+
+    <div class="card">
+        <div class="institution">Free User Utility</div>
+        <h2>⭐ Personal Watchlist</h2>
+        <p class="blue">Track symbols and mini market movement before premium access.</p>
+
+        <form action="/hdi/add-watchlist" method="POST">
+            <input type="hidden" name="key" value="{key}">
+            <select name="symbol">
+                <option value="AAPL">AAPL</option>
+                <option value="MSFT">MSFT</option>
+                <option value="TSLA">TSLA</option>
+                <option value="NVDA">NVDA</option>
+                <option value="AMZN">AMZN</option>
+                <option value="GOOGL">GOOGL</option>
+                <option value="META">META</option>
+            </select><br>
+            <button type="submit">Add to Watchlist</button>
+        </form>
+
+        <div class="grid">{watchlist}</div>
     </div>
 
     <div class="card">
@@ -473,6 +538,50 @@ def dashboard():
 </body>
 </html>
 """
+
+@app.route("/hdi/add-watchlist", methods=["POST"])
+def add_watchlist():
+    key = request.form.get("key")
+    symbol = request.form.get("symbol")
+
+    user = get_user_by_key(key)
+    if not user:
+        return "Invalid key"
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT id FROM watchlist WHERE api_key=%s AND symbol=%s",
+        (key, symbol)
+    )
+    existing = cur.fetchone()
+
+    if not existing:
+        cur.execute(
+            "INSERT INTO watchlist(api_key,symbol,created_at) VALUES(%s,%s,%s)",
+            (key, symbol, datetime.utcnow().isoformat())
+        )
+        conn.commit()
+
+    cur.close()
+    conn.close()
+
+    return redirect(f"/hdi/dashboard?key={key}")
+
+@app.route("/hdi/remove-watchlist")
+def remove_watchlist():
+    key = request.args.get("key")
+    symbol = request.args.get("symbol")
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM watchlist WHERE api_key=%s AND symbol=%s", (key, symbol))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect(f"/hdi/dashboard?key={key}")
 
 @app.route("/hdi/premium-alerts")
 def premium():
@@ -695,4 +804,3 @@ def access_requests():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-
