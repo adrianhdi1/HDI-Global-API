@@ -1,19 +1,15 @@
 from flask import Flask, jsonify, request, redirect
 import uuid, os, requests, psycopg2, random
-from datetime import datetime, timedelta
+from datetime import datetime
 
 app = Flask(__name__)
 
 FLW_SECRET_KEY = os.environ.get("FLW_SECRET_KEY")
-FLW_SECRET_HASH = os.environ.get("FLW_SECRET_HASH")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY")
 ADMIN_KEY = os.environ.get("ADMIN_KEY")
 
 BASE_URL = "https://hdi-global-api.onrender.com"
-PAY_AMOUNT = 10
-PAY_CURRENCY = "USD"
-
 SYMBOLS = ["AAPL", "MSFT", "TSLA", "NVDA", "AMZN", "GOOGL", "META"]
 
 def get_conn():
@@ -22,7 +18,6 @@ def get_conn():
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
-
     cur.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -33,18 +28,6 @@ def init_db():
         premium_until TEXT
     )
     """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS payments (
-        id SERIAL PRIMARY KEY,
-        api_key TEXT,
-        tx_ref TEXT UNIQUE,
-        amount REAL,
-        currency TEXT,
-        status TEXT DEFAULT 'pending'
-    )
-    """)
-
     cur.execute("""
     CREATE TABLE IF NOT EXISTS access_requests (
         id SERIAL PRIMARY KEY,
@@ -54,7 +37,6 @@ def init_db():
         created_at TEXT
     )
     """)
-
     cur.execute("""
     CREATE TABLE IF NOT EXISTS watchlist (
         id SERIAL PRIMARY KEY,
@@ -63,7 +45,6 @@ def init_db():
         created_at TEXT
     )
     """)
-
     conn.commit()
     cur.close()
     conn.close()
@@ -139,11 +120,9 @@ def generate_decision_signal(symbol=None):
     if market:
         change = market["change_pct"]
         source = "Alpha Vantage Market Data"
-        latest_date = market["latest_date"]
     else:
         change = round(random.uniform(-2.5, 3.5), 2)
         source = "HDI Fallback Decision Model"
-        latest_date = "Recent"
 
     if change > 2:
         action = "ENTER POSITION"
@@ -170,7 +149,6 @@ def generate_decision_signal(symbol=None):
     return {
         "source": source,
         "symbol": symbol,
-        "date": latest_date,
         "change": change,
         "sector": "Global Equities",
         "market_score": score,
@@ -189,10 +167,45 @@ def generate_decision_signal(symbol=None):
         ]
     }
 
-def confidence_bar(score):
-    filled = int(score / 10)
-    empty = 10 - filled
-    return "█" * filled + "░" * empty
+def generate_insight_feed():
+    sectors = [
+        "Global Equities",
+        "Artificial Intelligence",
+        "Energy Markets",
+        "Fintech",
+        "Logistics",
+        "Healthcare",
+        "Consumer Technology"
+    ]
+
+    themes = [
+        "unusual momentum pressure",
+        "institutional activity pattern",
+        "rising volatility",
+        "capital rotation behavior",
+        "short-term opportunity formation",
+        "market hesitation with breakout potential"
+    ]
+
+    sector = random.choice(sectors)
+    theme = random.choice(themes)
+    impact = random.choice(["MODERATE", "STRONG", "HIGH"])
+    confidence = random.randint(72, 91)
+
+    if impact == "HIGH":
+        interpretation = "Market participants may be positioning early. HDI recommends monitoring this area closely."
+    elif impact == "STRONG":
+        interpretation = "A visible movement pattern is forming. The next signal window may become important."
+    else:
+        interpretation = "Early activity detected. More confirmation is needed before strategic action."
+
+    return {
+        "sector": sector,
+        "theme": theme,
+        "impact": impact,
+        "confidence": confidence,
+        "interpretation": interpretation
+    }
 
 def get_watchlist(api_key):
     conn = get_conn()
@@ -207,9 +220,7 @@ def watchlist_html(api_key):
     symbols = get_watchlist(api_key)
 
     if not symbols:
-        return """
-        <p class="muted">No watchlist yet. Add a symbol like AAPL, TSLA, NVDA.</p>
-        """
+        return "<p class='muted'>No watchlist yet. Add a symbol like AAPL, TSLA, NVDA.</p>"
 
     html = ""
     for symbol in symbols:
@@ -261,11 +272,7 @@ def base_style():
         color:white;
         text-align:center;
     }
-    .container{
-        max-width:980px;
-        margin:auto;
-        padding:60px 20px;
-    }
+    .container{max-width:980px;margin:auto;padding:60px 20px;}
     .card{
         background:rgba(17,24,39,0.92);
         border:1px solid rgba(56,189,248,0.18);
@@ -314,11 +321,7 @@ def base_style():
         border-radius:14px;
         text-align:left;
     }
-    .grid{
-        display:grid;
-        grid-template-columns:1fr 1fr;
-        gap:12px;
-    }
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
     .blue{color:#38bdf8;font-weight:bold;}
     .gold{color:#facc15;font-weight:bold;}
     .muted{color:#94a3b8;font-size:14px;}
@@ -341,10 +344,7 @@ def home():
         <div class="institution">Private Beta Access</div>
         <h1>HDI Global Intelligence</h1>
         <p class="blue">Decision Intelligence System for Investors, Institutions & Strategic Decision Makers</p>
-        <p>
-            HDI converts real market data into strategic decisions:
-            Market Score, Strategic Action, Risk Level, Intelligence Brief, and Track Record.
-        </p>
+        <p>HDI converts real market data into strategic decisions.</p>
 
         <h2>Create Access</h2>
         <input id="name" placeholder="Full Name"><br>
@@ -459,6 +459,7 @@ def dashboard():
         return "Invalid access"
 
     signal = generate_decision_signal()
+    insight = generate_insight_feed()
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active ✅" if premium_active else "Private Beta / Free Access 🔒"
     access_button = f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>" if not premium_active else ""
@@ -477,7 +478,6 @@ def dashboard():
         <div class="institution">HDI Decision Terminal</div>
         <h1>Strategic Intelligence Dashboard</h1>
         <p class="blue">Welcome, {user[1]}</p>
-        <p>HDI is built for investors, institutions, companies, banks, and high-level decision makers.</p>
 
         <div class="grid">
             <div class="box"><b>Email</b><br>{user[2]}</div>
@@ -488,6 +488,20 @@ def dashboard():
 
         <a class="btn" href="/hdi/premium-alerts?key={key}">Open Decision Signal</a>
         {access_button}
+    </div>
+
+    <div class="card">
+        <div class="institution">Today’s HDI Insight Feed</div>
+        <h2>🧠 Market Intelligence Pulse</h2>
+        <div class="grid">
+            <div class="box"><b>Sector Focus</b><br>{insight["sector"]}</div>
+            <div class="box"><b>Detected Pattern</b><br>{insight["theme"]}</div>
+            <div class="box"><b>Impact Level</b><br><span class="gold">{insight["impact"]}</span></div>
+            <div class="box"><b>Confidence</b><br>{insight["confidence"]}%</div>
+        </div>
+        <h3>Interpretation</h3>
+        <p>{insight["interpretation"]}</p>
+        <p class="muted">Premium users unlock full signal reasoning, timing window, and strategic action map.</p>
     </div>
 
     <div class="card">
@@ -523,8 +537,6 @@ def dashboard():
             <div class="box"><b>Strategic Action</b><br><span class="gold">{signal["strategic_action"]}</span></div>
             <div class="box"><b>Micro Result</b><br>{signal["micro_result"]}</div>
         </div>
-
-        <p class="muted">Full intelligence brief, timing window, and risk breakdown remain restricted.</p>
     </div>
 
     <div class="card">
@@ -551,10 +563,7 @@ def add_watchlist():
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute(
-        "SELECT id FROM watchlist WHERE api_key=%s AND symbol=%s",
-        (key, symbol)
-    )
+    cur.execute("SELECT id FROM watchlist WHERE api_key=%s AND symbol=%s", (key, symbol))
     existing = cur.fetchone()
 
     if not existing:
@@ -593,8 +602,6 @@ def premium():
     if not user:
         return "Invalid key"
 
-    score_bar = confidence_bar(signal["market_score"])
-
     if not is_premium(user[4], user[5]):
         return f"""
 <html>
@@ -618,15 +625,6 @@ def premium():
             <div class="box"><b>Confidence Level</b><br>Partial Preview</div>
         </div>
 
-        <hr style="margin:35px;border-color:#1f2937;">
-
-        <div class="grid">
-            <div class="box locked"><b>Full Intelligence Brief</b><br>{signal["intelligence_brief"]}</div>
-            <div class="box locked"><b>Timing Window</b><br>{signal["window"]}</div>
-            <div class="box locked"><b>Risk Breakdown</b><br>{signal["risk"]}</div>
-            <div class="box locked"><b>Why This Signal?</b><br>Real-data reasoning locked</div>
-        </div>
-
         <h2>Request Institutional Access</h2>
         <p>Limited access is maintained to protect signal quality, system performance, and institutional-grade analysis.</p>
         <a class="pay" href="/hdi/request-access?key={key}">Request Institutional Access</a>
@@ -644,6 +642,7 @@ def premium():
 """
 
     why_html = "".join([f"<li>{w}</li>" for w in signal["why"]])
+    score_bar = "█" * int(signal["market_score"] / 10) + "░" * (10 - int(signal["market_score"] / 10))
 
     return f"""
 <html>
@@ -673,11 +672,6 @@ def premium():
 
         <h2>Why This Signal?</h2>
         <ul style="text-align:left;display:inline-block;">{why_html}</ul>
-    </div>
-
-    <div class="card">
-        <h2>📊 Recent Track Record</h2>
-        <div class="grid">{records}</div>
     </div>
 
     <a href="/hdi/dashboard?key={key}" class="muted">Back to Dashboard</a>
@@ -719,15 +713,9 @@ def request_access():
         <div class="institution">Private Beta Request</div>
         <h1>Institutional Access Request Recorded</h1>
         <p class="blue">Thank you, {user[1]}.</p>
-        <p>
-            HDI Premium is currently in restricted deployment.
-            Access is granted selectively to maintain signal quality, system performance,
-            and institutional-grade decision intelligence.
-        </p>
-
+        <p>HDI Premium is currently in restricted deployment.</p>
         <div class="box"><b>Name</b><br>{user[1]}</div>
         <div class="box"><b>Email</b><br>{user[2]}</div>
-
         <p class="gold">Your request is now in the private beta queue.</p>
         <a class="btn" href="/hdi/dashboard?key={key}">Return to Dashboard</a>
     </div>
@@ -765,11 +753,7 @@ def admin():
     cur.close()
     conn.close()
 
-    return jsonify({
-        "users": users,
-        "premium": premium,
-        "access_requests": requests_count
-    })
+    return jsonify({"users": users, "premium": premium, "access_requests": requests_count})
 
 @app.route("/hdi/leads")
 def leads():
