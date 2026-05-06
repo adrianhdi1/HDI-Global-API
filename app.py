@@ -698,6 +698,8 @@ def base_style():
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
     .blue{color:#38bdf8;font-weight:bold;} .gold{color:#facc15;font-weight:bold;} .muted{color:#94a3b8;font-size:14px;}
     .metric{font-size:30px;font-weight:bold;color:#38bdf8;} .locked{filter:blur(3px);opacity:.55;}
+    .nav{position:sticky;top:0;z-index:99;background:#020617;border:1px solid rgba(56,189,248,.18);border-radius:16px;padding:14px;margin-bottom:22px;}
+    .nav a{color:#38bdf8;text-decoration:none;font-weight:bold;margin:8px;display:inline-block;}
     </style>
     """
 
@@ -822,6 +824,17 @@ setTimeout(function(){{
 </head>
 <body><div class="container">
 
+<div class="nav">
+<a href="#portfolio">Portfolio</a>
+<a href="#economy">Economy</a>
+<a href="#sectors">Sectors</a>
+<a href="#news">News</a>
+<a href="#signals">Signals</a>
+<a href="#watchlist">Watchlist</a>
+<a href="#performance">Performance</a>
+<a href="/hdi/methodology">Methodology</a>
+</div>
+
 <div class="card">
 <div class="institution">HDI Live Intelligence Terminal</div>
 <h1>Adaptive Intelligence Dashboard</h1>
@@ -841,7 +854,7 @@ setTimeout(function(){{
 {access_button}
 </div>
 
-<div class="card">
+<div class="card" id="portfolio">
 <div class="institution">Portfolio Intelligence Layer</div>
 <h2>💼 Personal Portfolio Intelligence</h2>
 <p class="blue">HDI analyzes your holdings, exposure, risk, strongest and weakest positions.</p>
@@ -858,10 +871,10 @@ setTimeout(function(){{
 {portfolio}
 </div>
 
-<div class="card"><div class="institution">Economy Intelligence Layer</div><h2>🌐 Global Economy Intelligence</h2><div class="grid">{economies}</div></div>
-<div class="card"><div class="institution">Sector Intelligence Layer</div><h2>🌍 Global Sector Intelligence</h2><div class="grid">{sectors}</div></div>
-<div class="card"><div class="institution">News Intelligence Layer</div><h2>📰 Market News Intelligence</h2><div class="grid">{news}</div></div>
-<div class="card"><div class="institution">Live Signal Ranking</div><h2>🔥 Top Ranked Signals</h2><div class="grid">{ranked_signals}</div></div>
+<div class="card" id="economy"><div class="institution">Economy Intelligence Layer</div><h2>🌐 Global Economy Intelligence</h2><div class="grid">{economies}</div></div>
+<div class="card" id="sectors"><div class="institution">Sector Intelligence Layer</div><h2>🌍 Global Sector Intelligence</h2><div class="grid">{sectors}</div></div>
+<div class="card" id="news"><div class="institution">News Intelligence Layer</div><h2>📰 Market News Intelligence</h2><div class="grid">{news}</div></div>
+<div class="card" id="signals"><div class="institution">Live Signal Ranking</div><h2>🔥 Top Ranked Signals</h2><div class="grid">{ranked_signals}</div></div>
 
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
@@ -891,7 +904,7 @@ setTimeout(function(){{
 <p>{insight["interpretation"]}</p>
 </div>
 
-<div class="card">
+<div class="card" id="watchlist">
 <h2>⭐ Personal Watchlist</h2>
 <form action="/hdi/add-watchlist" method="POST">
 <input type="hidden" name="key" value="{key}">
@@ -903,7 +916,7 @@ setTimeout(function(){{
 <div class="grid">{watchlist}</div>
 </div>
 
-<div class="card"><h2>📊 HDI Performance Layer</h2>{performance}</div>
+<div class="card" id="performance"><h2>📊 HDI Performance Layer</h2>{performance}</div>
 
 <a href="/" class="muted">Logout</a>
 </div></body></html>
