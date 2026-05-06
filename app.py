@@ -20,31 +20,11 @@ SECTORS = {
 }
 
 ECONOMIES = {
-    "USA Economy": {
-        "focus": "Inflation, interest rates, technology markets",
-        "risk": "Policy sensitivity",
-        "opportunity": "AI, equities, institutional capital"
-    },
-    "China Economy": {
-        "focus": "Manufacturing, exports, real estate pressure",
-        "risk": "Demand slowdown",
-        "opportunity": "Industrial recovery and trade flows"
-    },
-    "Africa Markets": {
-        "focus": "Agriculture, infrastructure, mobile money, energy",
-        "risk": "Currency pressure and inflation",
-        "opportunity": "Emerging consumer growth"
-    },
-    "Emerging Markets": {
-        "focus": "Currency movement, commodities, capital inflows",
-        "risk": "External debt and rate pressure",
-        "opportunity": "High-growth market expansion"
-    },
-    "Global Economy": {
-        "focus": "Inflation, liquidity, global risk appetite",
-        "risk": "Macro uncertainty",
-        "opportunity": "Capital rotation across sectors"
-    }
+    "USA Economy": {"focus":"Inflation, interest rates, technology markets","risk":"Policy sensitivity","opportunity":"AI, equities, institutional capital"},
+    "China Economy": {"focus":"Manufacturing, exports, real estate pressure","risk":"Demand slowdown","opportunity":"Industrial recovery and trade flows"},
+    "Africa Markets": {"focus":"Agriculture, infrastructure, mobile money, energy","risk":"Currency pressure and inflation","opportunity":"Emerging consumer growth"},
+    "Emerging Markets": {"focus":"Currency movement, commodities, capital inflows","risk":"External debt and rate pressure","opportunity":"High-growth market expansion"},
+    "Global Economy": {"focus":"Inflation, liquidity, global risk appetite","risk":"Macro uncertainty","opportunity":"Capital rotation across sectors"}
 }
 
 def get_conn():
@@ -100,6 +80,14 @@ def init_db():
         checked_at TEXT
     )""")
 
+    cur.execute("""CREATE TABLE IF NOT EXISTS portfolio (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        symbol TEXT,
+        amount REAL,
+        created_at TEXT
+    )""")
+
     conn.commit()
     cur.close()
     conn.close()
@@ -138,11 +126,7 @@ def fetch_alpha_daily(symbol):
     try:
         res = requests.get(
             "https://www.alphavantage.co/query",
-            params={
-                "function": "TIME_SERIES_DAILY",
-                "symbol": symbol,
-                "apikey": ALPHA_VANTAGE_KEY
-            },
+            params={"function":"TIME_SERIES_DAILY","symbol":symbol,"apikey":ALPHA_VANTAGE_KEY},
             timeout=15
         )
         data = res.json()
@@ -179,12 +163,7 @@ def fetch_news_sentiment():
     try:
         res = requests.get(
             "https://www.alphavantage.co/query",
-            params={
-                "function": "NEWS_SENTIMENT",
-                "tickers": "AAPL,TSLA,NVDA,MSFT",
-                "limit": 6,
-                "apikey": ALPHA_VANTAGE_KEY
-            },
+            params={"function":"NEWS_SENTIMENT","tickers":"AAPL,TSLA,NVDA,MSFT","limit":6,"apikey":ALPHA_VANTAGE_KEY},
             timeout=15
         )
         data = res.json()
@@ -205,10 +184,7 @@ def track_behavior(api_key, symbol, action):
         if existing:
             cur.execute("UPDATE user_behavior SET count=%s WHERE id=%s", (existing[1] + 1, existing[0]))
         else:
-            cur.execute(
-                "INSERT INTO user_behavior(api_key,symbol,action,count) VALUES(%s,%s,%s,1)",
-                (api_key, symbol, action)
-            )
+            cur.execute("INSERT INTO user_behavior(api_key,symbol,action,count) VALUES(%s,%s,%s,1)", (api_key, symbol, action))
 
         conn.commit()
         cur.close()
@@ -258,12 +234,7 @@ def calculate_multi_factor(symbol, change, volatility, is_preferred):
     trend_strength = min(100, max(40, int(65 + abs(change) * 7)))
     relevance_score = 95 if is_preferred else random.randint(55, 75)
 
-    final_score = int(
-        momentum_score * 0.35 +
-        volatility_score * 0.20 +
-        trend_strength * 0.25 +
-        relevance_score * 0.20
-    )
+    final_score = int(momentum_score * 0.35 + volatility_score * 0.20 + trend_strength * 0.25 + relevance_score * 0.20)
 
     if final_score >= 88:
         priority = "CRITICAL"
@@ -335,11 +306,7 @@ def generate_decision_signal(symbol=None, api_key=None):
     expected_low = round(abs(change) * 0.7 + 0.8, 1)
     expected_high = round(abs(change) * 1.9 + 1.5, 1)
 
-    adaptive_note = (
-        f"Personalized signal based on your activity around {preferred}."
-        if preferred else
-        "General signal while HDI learns your behavior."
-    )
+    adaptive_note = f"Personalized signal based on your activity around {preferred}." if preferred else "General signal while HDI learns your behavior."
 
     return {
         "symbol": symbol,
@@ -420,10 +387,8 @@ def generate_sector_intelligence():
     return sorted(sector_rows, key=lambda x: x["sector_score"], reverse=True)
 
 def sector_intelligence_html():
-    sectors = generate_sector_intelligence()
     html = ""
-
-    for s in sectors:
+    for s in generate_sector_intelligence():
         html += f"""
         <div class="box">
             <b>{s["sector"]}</b><br>
@@ -436,8 +401,8 @@ def sector_intelligence_html():
             Priority: {s["priority"]}
         </div>
         """
-
     return html
+
 def generate_economy_intelligence():
     rows = []
 
@@ -446,11 +411,7 @@ def generate_economy_intelligence():
         risk_score = random.randint(40, 85)
         opportunity_score = random.randint(55, 92)
 
-        total_score = int(
-            opportunity_score * 0.45 +
-            (100 - risk_score) * 0.25 +
-            (100 - inflation_pressure) * 0.30
-        )
+        total_score = int(opportunity_score * 0.45 + (100 - risk_score) * 0.25 + (100 - inflation_pressure) * 0.30)
 
         if total_score >= 75:
             mood = "OPPORTUNITY ZONE"
@@ -478,10 +439,8 @@ def generate_economy_intelligence():
     return sorted(rows, key=lambda x: x["total_score"], reverse=True)
 
 def economy_intelligence_html():
-    economies = generate_economy_intelligence()
     html = ""
-
-    for e in economies:
+    for e in generate_economy_intelligence():
         html += f"""
         <div class="box">
             <b>{e["economy"]}</b><br>
@@ -496,34 +455,19 @@ def economy_intelligence_html():
             Opportunity Score: {e["opportunity_score"]}/100
         </div>
         """
-
     return html
 
 def generate_ranked_signals(api_key=None, limit=5):
-    ranked = []
-    for symbol in SYMBOLS:
-        ranked.append(generate_decision_signal(symbol=symbol, api_key=api_key))
-
-    ranked = sorted(
-        ranked,
-        key=lambda x: (
-            x["market_score"],
-            x["factors"]["relevance_score"],
-            x["factors"]["momentum_score"]
-        ),
-        reverse=True
-    )
+    ranked = [generate_decision_signal(symbol=s, api_key=api_key) for s in SYMBOLS]
+    ranked = sorted(ranked, key=lambda x: (x["market_score"], x["factors"]["relevance_score"], x["factors"]["momentum_score"]), reverse=True)
     return ranked[:limit]
 
 def ranked_signals_html(api_key):
-    signals = generate_ranked_signals(api_key)
     html = ""
-    rank = 1
-
-    for s in signals:
+    for i, s in enumerate(generate_ranked_signals(api_key), 1):
         html += f"""
         <div class="box">
-            <b>#{rank} — {s["symbol"]}</b><br>
+            <b>#{i} — {s["symbol"]}</b><br>
             Pattern: {s["pattern"]}<br>
             Score: <span class="metric">{s["market_score"]}/100</span><br>
             Priority: <span class="gold">{s["priority"]}</span><br>
@@ -531,39 +475,19 @@ def ranked_signals_html(api_key):
             <span class="muted">Strategic Action: 🔒 Locked</span>
         </div>
         """
-        rank += 1
     return html
 
 def news_intelligence_html():
     news = fetch_news_sentiment()
 
     if not news:
-        fallback = [
-            {
-                "title": "AI sector showing increased institutional attention",
-                "summary": "HDI detects rising market interest around technology and AI-linked equities.",
-                "sentiment": "Bullish"
-            },
-            {
-                "title": "Technology equities remain active across global markets",
-                "summary": "Market movement suggests continued decision pressure in major tech names.",
-                "sentiment": "Neutral"
-            }
+        news = [
+            {"title":"AI sector showing increased institutional attention","summary":"HDI detects rising market interest around technology and AI-linked equities.","overall_sentiment_label":"Bullish","source":"HDI"},
+            {"title":"Technology equities remain active across global markets","summary":"Market movement suggests continued decision pressure in major tech names.","overall_sentiment_label":"Neutral","source":"HDI"}
         ]
 
-        html = ""
-        for item in fallback:
-            html += f"""
-            <div class="box">
-                <b>{item["title"]}</b><br>
-                <span class="muted">{item["summary"]}</span><br>
-                Sentiment: <span class="gold">{item["sentiment"]}</span>
-            </div>
-            """
-        return html
-
     html = ""
-    for item in news:
+    for item in news[:5]:
         title = item.get("title", "Market headline unavailable")
         summary = item.get("summary", "No summary available.")
         sentiment = item.get("overall_sentiment_label", "Neutral")
@@ -589,15 +513,7 @@ def save_signal(api_key, signal):
         cur.execute("""
             INSERT INTO signal_history(api_key,symbol,action,score,entry_price,expected,created_at)
             VALUES(%s,%s,%s,%s,%s,%s,%s)
-        """, (
-            api_key,
-            signal["symbol"],
-            signal["strategic_action"],
-            signal["market_score"],
-            entry_price,
-            signal["expected"],
-            datetime.utcnow().isoformat()
-        ))
+        """, (api_key, signal["symbol"], signal["strategic_action"], signal["market_score"], entry_price, signal["expected"], datetime.utcnow().isoformat()))
         conn.commit()
         cur.close()
         conn.close()
@@ -707,6 +623,71 @@ def generate_insight_feed(api_key=None):
         "interpretation": "Market behavior suggests an emerging decision window. HDI will personalize this feed as you use the system."
     }
 
+def get_portfolio(api_key):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT symbol, amount FROM portfolio WHERE api_key=%s ORDER BY id DESC", (api_key,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
+
+def portfolio_intelligence_html(api_key):
+    holdings = get_portfolio(api_key)
+
+    if not holdings:
+        return "<p class='muted'>No portfolio yet. Add holdings to activate portfolio intelligence.</p>"
+
+    total_amount = sum([float(h[1]) for h in holdings])
+    rows = ""
+    risk_total = 0
+    strongest = None
+    weakest = None
+
+    for symbol, amount in holdings:
+        signal = generate_decision_signal(symbol, api_key)
+        weight = round((float(amount) / total_amount) * 100, 1) if total_amount else 0
+        risk_total += (100 - signal["market_score"]) * (weight / 100)
+
+        if strongest is None or signal["market_score"] > strongest["score"]:
+            strongest = {"symbol": symbol, "score": signal["market_score"]}
+
+        if weakest is None or signal["market_score"] < weakest["score"]:
+            weakest = {"symbol": symbol, "score": signal["market_score"]}
+
+        rows += f"""
+        <div class="box">
+            <b>{symbol}</b><br>
+            Exposure: {weight}%<br>
+            Amount: {amount}<br>
+            Score: <span class="metric">{signal["market_score"]}/100</span><br>
+            Priority: <span class="gold">{signal["priority"]}</span><br>
+            HDI View: {signal["recommendation"]}
+        </div>
+        """
+
+    portfolio_risk = round(risk_total, 1)
+
+    if portfolio_risk < 25:
+        recommendation = "Portfolio risk appears controlled. Maintain monitoring."
+    elif portfolio_risk < 45:
+        recommendation = "Moderate portfolio risk detected. Review weaker positions."
+    else:
+        recommendation = "High portfolio risk detected. Consider reducing exposure to weak signals."
+
+    summary = f"""
+    <div class="box">
+        <b>Portfolio Risk Score</b><br>
+        <span class="metric">{portfolio_risk}/100</span><br><br>
+        <b>Strongest Holding:</b> {strongest["symbol"]} ({strongest["score"]}/100)<br>
+        <b>Weakest Holding:</b> {weakest["symbol"]} ({weakest["score"]}/100)<br><br>
+        <b>HDI Portfolio Recommendation:</b><br>
+        <span class="gold">{recommendation}</span>
+    </div>
+    """
+
+    return summary + "<div class='grid'>" + rows + "</div>"
+
 def base_style():
     return """
     <style>
@@ -735,7 +716,7 @@ def home():
 <div class="institution">Private Beta Access</div>
 <h1>HDI Global Intelligence</h1>
 <p class="blue">Live Multi-Factor Adaptive Decision Intelligence System</p>
-<p>HDI analyzes market data, news intelligence, sector intelligence, economy intelligence, user relevance, signal ranking, and feedback outcomes.</p>
+<p>HDI analyzes market data, news, sectors, economies, portfolio exposure, user relevance, and feedback outcomes.</p>
 
 <h2>Create Access</h2>
 <input id="name" placeholder="Full Name"><br>
@@ -827,6 +808,7 @@ def dashboard():
     news = news_intelligence_html()
     sectors = sector_intelligence_html()
     economies = economy_intelligence_html()
+    portfolio = portfolio_intelligence_html(key)
 
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active ✅" if premium_active else "Private Beta / Free Access 🔒"
@@ -862,6 +844,23 @@ setTimeout(function(){{
 <a class="btn" href="/hdi/premium-alerts?key={key}">Open Multi-Factor Signal</a>
 <a class="btn" href="/hdi/methodology">View Methodology</a>
 {access_button}
+</div>
+
+<div class="card">
+<div class="institution">Portfolio Intelligence Layer</div>
+<h2>💼 Personal Portfolio Intelligence</h2>
+<p class="blue">HDI analyzes your holdings, exposure, risk, strongest and weakest positions.</p>
+
+<form action="/hdi/add-portfolio" method="POST">
+<input type="hidden" name="key" value="{key}">
+<select name="symbol">
+<option>AAPL</option><option>MSFT</option><option>TSLA</option><option>NVDA</option><option>AMZN</option><option>GOOGL</option><option>META</option>
+</select><br>
+<input name="amount" placeholder="Amount / Exposure Value"><br>
+<button type="submit">Add Holding</button>
+</form>
+
+{portfolio}
 </div>
 
 <div class="card">
@@ -965,6 +964,33 @@ def add_watchlist():
     track_behavior(key, symbol, "watchlist")
     return redirect(f"/hdi/dashboard?key={key}")
 
+@app.route("/hdi/add-portfolio", methods=["POST"])
+def add_portfolio():
+    key = request.form.get("key")
+    symbol = request.form.get("symbol")
+    amount = request.form.get("amount")
+
+    if not get_user_by_key(key):
+        return "Invalid key"
+
+    try:
+        amount = float(amount)
+    except:
+        amount = 0
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO portfolio(api_key,symbol,amount,created_at) VALUES(%s,%s,%s,%s)",
+        (key, symbol, amount, datetime.utcnow().isoformat())
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    track_behavior(key, symbol, "portfolio")
+    return redirect(f"/hdi/dashboard?key={key}")
+
 @app.route("/hdi/remove-watchlist")
 def remove_watchlist():
     key = request.args.get("key")
@@ -976,6 +1002,15 @@ def remove_watchlist():
     cur.close()
     conn.close()
     return redirect(f"/hdi/dashboard?key={key}")
+
+@app.route("/hdi/portfolio")
+def portfolio_api():
+    key = request.args.get("key")
+    if not key:
+        return jsonify({"error":"key required"}), 400
+
+    holdings = get_portfolio(key)
+    return jsonify([{"symbol": h[0], "amount": h[1]} for h in holdings])
 
 @app.route("/hdi/news")
 def news_api():
@@ -1003,7 +1038,7 @@ def methodology():
 <div class="institution">HDI Methodology</div>
 <h1>How HDI Generates Intelligence</h1>
 <p class="blue">HDI is a multi-factor decision intelligence system.</p>
-<p>HDI analyzes market movement, news sentiment, sector intelligence, economy intelligence, user behavior, and feedback outcomes.</p>
+<p>HDI analyzes market movement, news sentiment, sector intelligence, economy intelligence, portfolio exposure, user behavior, and feedback outcomes.</p>
 </div>
 
 <div class="card">
@@ -1013,10 +1048,10 @@ def methodology():
 <div class="box"><b>Volatility</b><br>Measures instability and risk around price movement.</div>
 <div class="box"><b>Trend Strength</b><br>Estimates whether movement is weak, forming, or strong.</div>
 <div class="box"><b>User Relevance</b><br>Adapts intelligence based on watchlist and behavior.</div>
+<div class="box"><b>Portfolio Intelligence</b><br>Analyzes exposure, risk, strongest and weakest holdings.</div>
 <div class="box"><b>News Intelligence</b><br>Reads market headlines and sentiment signals.</div>
 <div class="box"><b>Sector Intelligence</b><br>Analyzes sectors like AI, Tech, EVs, Cloud, and Digital Advertising.</div>
 <div class="box"><b>Economy Intelligence</b><br>Measures macro risk, inflation pressure, and opportunity zones.</div>
-<div class="box"><b>Feedback Loop</b><br>Compares generated signals against market outcomes.</div>
 </div>
 </div>
 
