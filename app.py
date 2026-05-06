@@ -10,7 +10,15 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY")
 
 SYMBOLS = ["AAPL", "MSFT", "TSLA", "NVDA", "AMZN", "GOOGL", "META"]
 
-# ---------------- DB ----------------
+SECTORS = {
+    "Artificial Intelligence": ["NVDA", "MSFT", "GOOGL"],
+    "Technology": ["AAPL", "MSFT", "META"],
+    "Electric Vehicles": ["TSLA"],
+    "E-Commerce": ["AMZN"],
+    "Digital Advertising": ["GOOGL", "META"],
+    "Cloud Infrastructure": ["MSFT", "AMZN", "GOOGL"]
+}
+
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
 
@@ -70,7 +78,6 @@ def init_db():
 
 init_db()
 
-# ---------------- USERS ----------------
 def get_user_by_email(email):
     conn = get_conn()
     cur = conn.cursor()
@@ -97,11 +104,9 @@ def is_premium(plan, premium_until):
     except:
         return False
 
-# ---------------- DATA ----------------
 def fetch_alpha_daily(symbol):
     if not ALPHA_VANTAGE_KEY:
         return None
-
     try:
         res = requests.get(
             "https://www.alphavantage.co/query",
@@ -143,7 +148,6 @@ def fetch_alpha_daily(symbol):
 def fetch_news_sentiment():
     if not ALPHA_VANTAGE_KEY:
         return []
-
     try:
         res = requests.get(
             "https://www.alphavantage.co/query",
@@ -160,7 +164,6 @@ def fetch_news_sentiment():
     except:
         return []
 
-# ---------------- ADAPTIVE BEHAVIOR ----------------
 def track_behavior(api_key, symbol, action):
     try:
         conn = get_conn()
@@ -221,7 +224,6 @@ def get_behavior_summary(api_key):
 
     return "Adaptive focus: " + ", ".join([f"{r[0]} ({r[1]})" for r in rows])
 
-# ---------------- INTELLIGENCE ENGINE ----------------
 def calculate_multi_factor(symbol, change, volatility, is_preferred):
     momentum_score = min(100, max(40, int(60 + change * 8)))
     volatility_score = min(100, max(35, int(100 - volatility * 6)))
@@ -340,6 +342,76 @@ def generate_decision_signal(symbol=None, api_key=None):
         }
     }
 
+def generate_sector_intelligence():
+    sector_rows = []
+
+    for sector, symbols in SECTORS.items():
+        changes = []
+        volatilities = []
+
+        for symbol in symbols:
+            market = fetch_alpha_daily(symbol)
+            if market:
+                changes.append(market["change_pct"])
+                volatilities.append(market["volatility_pct"])
+            else:
+                changes.append(round(random.uniform(-2, 3), 2))
+                volatilities.append(round(random.uniform(1, 5), 2))
+
+        avg_change = round(sum(changes) / len(changes), 2)
+        avg_vol = round(sum(volatilities) / len(volatilities), 2)
+
+        momentum = min(100, max(40, int(60 + avg_change * 8)))
+        stability = min(100, max(35, int(100 - avg_vol * 6)))
+        sector_score = int(momentum * 0.6 + stability * 0.4)
+
+        if sector_score >= 85:
+            opportunity = "Strong opportunity pressure detected"
+            risk = "MODERATE"
+            priority = "HIGH"
+        elif sector_score >= 70:
+            opportunity = "Developing opportunity pattern"
+            risk = "CONTROLLED"
+            priority = "MEDIUM"
+        else:
+            opportunity = "Weak or uncertain sector conditions"
+            risk = "ELEVATED"
+            priority = "LOW"
+
+        sector_rows.append({
+            "sector": sector,
+            "symbols": ", ".join(symbols),
+            "avg_change": avg_change,
+            "avg_volatility": avg_vol,
+            "sector_score": sector_score,
+            "opportunity": opportunity,
+            "risk": risk,
+            "priority": priority
+        })
+
+    sector_rows = sorted(sector_rows, key=lambda x: x["sector_score"], reverse=True)
+    return sector_rows
+
+def sector_intelligence_html():
+    sectors = generate_sector_intelligence()
+    html = ""
+
+    for s in sectors:
+        html += f"""
+        <div class="box">
+            <b>{s["sector"]}</b><br>
+            Symbols: <span class="muted">{s["symbols"]}</span><br>
+            Sector Score: <span class="metric">{s["sector_score"]}/100</span><br>
+            Avg Change: {s["avg_change"]}%<br>
+            Volatility: {s["avg_volatility"]}%<br>
+            Opportunity: <span class="gold">{s["opportunity"]}</span><br>
+            Risk: {s["risk"]}<br>
+            Priority: {s["priority"]}
+        </div>
+        """
+
+    return html
+
 def generate_ranked_signals(api_key=None, limit=5):
     ranked = []
     for symbol in SYMBOLS:
@@ -375,7 +447,6 @@ def ranked_signals_html(api_key):
         rank += 1
     return html
 
-# ---------------- NEWS INTELLIGENCE ----------------
 def news_intelligence_html():
     news = fetch_news_sentiment()
 
@@ -421,7 +492,6 @@ def news_intelligence_html():
         """
     return html
 
-# ---------------- FEEDBACK ----------------
 def save_signal(api_key, signal):
     market = fetch_alpha_daily(signal["symbol"])
     entry_price = market["latest_close"] if market else 0
@@ -466,7 +536,6 @@ def signal_accuracy_html():
     except:
         return "<p class='muted'>Feedback accuracy unavailable.</p>"
 
-# ---------------- WATCHLIST + PERFORMANCE ----------------
 def get_watchlist(api_key):
     conn = get_conn()
     cur = conn.cursor()
@@ -551,7 +620,6 @@ def generate_insight_feed(api_key=None):
         "interpretation": "Market behavior suggests an emerging decision window. HDI will personalize this feed as you use the system."
     }
 
-# ---------------- STYLE ----------------
 def base_style():
     return """
     <style>
@@ -570,7 +638,6 @@ def base_style():
     </style>
     """
 
-# ---------------- ROUTES ----------------
 @app.route("/")
 def home():
     return f"""
@@ -581,7 +648,7 @@ def home():
 <div class="institution">Private Beta Access</div>
 <h1>HDI Global Intelligence</h1>
 <p class="blue">Live Multi-Factor Adaptive Decision Intelligence System</p>
-<p>HDI analyzes market data, news intelligence, user relevance, signal ranking, and feedback outcomes.</p>
+<p>HDI analyzes market data, news intelligence, sector intelligence, user relevance, signal ranking, and feedback outcomes.</p>
 
 <h2>Create Access</h2>
 <input id="name" placeholder="Full Name"><br>
@@ -671,6 +738,7 @@ def dashboard():
     behavior = get_behavior_summary(key)
     ranked_signals = ranked_signals_html(key)
     news = news_intelligence_html()
+    sectors = sector_intelligence_html()
 
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active ✅" if premium_active else "Private Beta / Free Access 🔒"
@@ -706,6 +774,13 @@ setTimeout(function(){{
 <a class="btn" href="/hdi/premium-alerts?key={key}">Open Multi-Factor Signal</a>
 <a class="btn" href="/hdi/methodology">View Methodology</a>
 {access_button}
+</div>
+
+<div class="card">
+<div class="institution">Sector Intelligence Layer</div>
+<h2>🌍 Global Sector Intelligence</h2>
+<p class="blue">HDI analyzes sector-level strength, risk, and opportunity pressure.</p>
+<div class="grid">{sectors}</div>
 </div>
 
 <div class="card">
@@ -775,7 +850,6 @@ setTimeout(function(){{
 </div></body></html>
 """
 
-# ---------------- MORE ROUTES ----------------
 @app.route("/hdi/add-watchlist", methods=["POST"])
 def add_watchlist():
     key = request.form.get("key")
@@ -812,6 +886,10 @@ def remove_watchlist():
 def news_api():
     return jsonify(fetch_news_sentiment())
 
+@app.route("/hdi/sectors")
+def sectors_api():
+    return jsonify(generate_sector_intelligence())
+
 @app.route("/hdi/methodology")
 def methodology():
     return f"""
@@ -826,7 +904,7 @@ def methodology():
 <div class="institution">HDI Methodology</div>
 <h1>How HDI Generates Intelligence</h1>
 <p class="blue">HDI is a multi-factor decision intelligence system.</p>
-<p>HDI analyzes market movement, news sentiment, user behavior, and feedback outcomes.</p>
+<p>HDI analyzes market movement, news sentiment, sector intelligence, user behavior, and feedback outcomes.</p>
 </div>
 
 <div class="card">
@@ -837,7 +915,7 @@ def methodology():
 <div class="box"><b>Trend Strength</b><br>Estimates whether movement is weak, forming, or strong.</div>
 <div class="box"><b>User Relevance</b><br>Adapts intelligence based on watchlist and behavior.</div>
 <div class="box"><b>News Intelligence</b><br>Reads market headlines and sentiment signals.</div>
-<div class="box"><b>Feedback Loop</b><br>Compares generated signals against market outcomes.</div>
+<div class="box"><b>Sector Intelligence</b><br>Analyzes sectors like AI, Tech, EVs, Cloud, and Digital Advertising.</div>
 </div>
 </div>
 
@@ -926,46 +1004,6 @@ def request_access():
 <p>Your access request is now in the private beta queue.</p>
 <a class="btn" href="/hdi/dashboard?key={key}">Return to Dashboard</a>
 </div></div></body></html>
-"""
-
-@app.route("/hdi/admin-panel")
-def admin_panel():
-    if request.args.get("key") != ADMIN_KEY:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("SELECT COUNT(*) FROM users")
-    users = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM access_requests")
-    requests_count = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM user_behavior")
-    behavior_events = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM signal_history")
-    signals_saved = cur.fetchone()[0]
-
-    cur.close()
-    conn.close()
-
-    return f"""
-<html>
-<head><title>HDI Admin Panel</title>{base_style()}</head>
-<body>
-<div class="container">
-<div class="card">
-<div class="institution">HDI Founder Control Center</div>
-<h1>Admin Panel</h1>
-<div class="grid">
-<div class="box"><b>Total Users</b><br><span class="metric">{users}</span></div>
-<div class="box"><b>Access Requests</b><br><span class="metric">{requests_count}</span></div>
-<div class="box"><b>Behavior Events</b><br><span class="metric">{behavior_events}</span></div>
-<div class="box"><b>Signals Saved</b><br><span class="metric">{signals_saved}</span></div>
-</div>
-</div>
-</div>
-</body>
-</html>
 """
 
 @app.route("/hdi/real-signal")
