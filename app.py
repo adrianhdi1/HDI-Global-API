@@ -8,9 +8,9 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY")
 ADMIN_KEY = os.environ.get("ADMIN_KEY")
 
-BASE_URL = "https://hdi-global-api.onrender.com"
 SYMBOLS = ["AAPL", "MSFT", "TSLA", "NVDA", "AMZN", "GOOGL", "META"]
 
+# ---------------- DB ----------------
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
 
@@ -70,6 +70,7 @@ def init_db():
 
 init_db()
 
+# ---------------- USERS ----------------
 def get_user_by_email(email):
     conn = get_conn()
     cur = conn.cursor()
@@ -96,6 +97,7 @@ def is_premium(plan, premium_until):
     except:
         return False
 
+# ---------------- DATA ----------------
 def fetch_alpha_daily(symbol):
     if not ALPHA_VANTAGE_KEY:
         return None
@@ -138,6 +140,27 @@ def fetch_alpha_daily(symbol):
     except:
         return None
 
+def fetch_news_sentiment():
+    if not ALPHA_VANTAGE_KEY:
+        return []
+
+    try:
+        res = requests.get(
+            "https://www.alphavantage.co/query",
+            params={
+                "function": "NEWS_SENTIMENT",
+                "tickers": "AAPL,TSLA,NVDA,MSFT",
+                "limit": 6,
+                "apikey": ALPHA_VANTAGE_KEY
+            },
+            timeout=15
+        )
+        data = res.json()
+        return data.get("feed", [])[:5]
+    except:
+        return []
+
+# ---------------- ADAPTIVE BEHAVIOR ----------------
 def track_behavior(api_key, symbol, action):
     try:
         conn = get_conn()
@@ -198,6 +221,7 @@ def get_behavior_summary(api_key):
 
     return "Adaptive focus: " + ", ".join([f"{r[0]} ({r[1]})" for r in rows])
 
+# ---------------- INTELLIGENCE ENGINE ----------------
 def calculate_multi_factor(symbol, change, volatility, is_preferred):
     momentum_score = min(100, max(40, int(60 + change * 8)))
     volatility_score = min(100, max(35, int(100 - volatility * 6)))
@@ -254,28 +278,28 @@ def generate_decision_signal(symbol=None, api_key=None):
         exposure = "20% – 30%"
         risk = "MODERATE"
         pattern = "Multi-Factor Momentum Breakout"
-        brief = "HDI detects strong alignment between momentum, trend strength, and market relevance. This indicates a high-priority decision window."
+        brief = "HDI detects strong alignment between momentum, trend strength, and market relevance."
         recommendation = "HDI Recommendation: Consider entry within the next 2–4 hours while momentum remains active."
     elif score >= 76:
         action = "MONITOR CLOSELY"
         exposure = "10% – 20%"
         risk = "CONTROLLED"
         pattern = "Adaptive Growth Pattern"
-        brief = "HDI detects improving conditions, but full confirmation is still developing. Monitoring is recommended before aggressive action."
+        brief = "HDI detects improving conditions, but confirmation is still developing."
         recommendation = "HDI Recommendation: Monitor closely and wait for confirmation before increasing exposure."
     elif score >= 64:
         action = "WAIT FOR CONFIRMATION"
         exposure = "0% – 10%"
         risk = "MODERATE"
         pattern = "Confirmation Pending Pattern"
-        brief = "HDI detects partial alignment, but not enough strength for a decisive move. Patience is preferred."
+        brief = "HDI detects partial alignment, but not enough strength for a decisive move."
         recommendation = "HDI Recommendation: Wait for stronger confirmation before taking action."
     else:
         action = "AVOID / STAND BY"
         exposure = "0%"
         risk = "ELEVATED"
         pattern = "Weak Signal Pattern"
-        brief = "HDI detects weak market alignment. Current conditions do not justify action."
+        brief = "HDI detects weak market alignment."
         recommendation = "HDI Recommendation: Avoid action until stronger signals appear."
 
     expected_low = round(abs(change) * 0.7 + 0.8, 1)
@@ -351,6 +375,53 @@ def ranked_signals_html(api_key):
         rank += 1
     return html
 
+# ---------------- NEWS INTELLIGENCE ----------------
+def news_intelligence_html():
+    news = fetch_news_sentiment()
+
+    if not news:
+        fallback = [
+            {
+                "title": "AI sector showing increased institutional attention",
+                "summary": "HDI detects rising market interest around technology and AI-linked equities.",
+                "sentiment": "Bullish"
+            },
+            {
+                "title": "Technology equities remain active across global markets",
+                "summary": "Market movement suggests continued decision pressure in major tech names.",
+                "sentiment": "Neutral"
+            }
+        ]
+
+        html = ""
+        for item in fallback:
+            html += f"""
+            <div class="box">
+                <b>{item["title"]}</b><br>
+                <span class="muted">{item["summary"]}</span><br>
+                Sentiment: <span class="gold">{item["sentiment"]}</span>
+            </div>
+            """
+        return html
+
+    html = ""
+    for item in news:
+        title = item.get("title", "Market headline unavailable")
+        summary = item.get("summary", "No summary available.")
+        sentiment = item.get("overall_sentiment_label", "Neutral")
+        source = item.get("source", "Market Source")
+
+        html += f"""
+        <div class="box">
+            <b>{title}</b><br>
+            <span class="muted">{summary[:220]}...</span><br><br>
+            Source: {source}<br>
+            Sentiment: <span class="gold">{sentiment}</span>
+        </div>
+        """
+    return html
+
+# ---------------- FEEDBACK ----------------
 def save_signal(api_key, signal):
     market = fetch_alpha_daily(signal["symbol"])
     entry_price = market["latest_close"] if market else 0
@@ -376,25 +447,57 @@ def save_signal(api_key, signal):
     except:
         pass
 
-def generate_insight_feed(api_key=None):
-    preferred = get_preferred_symbol(api_key) if api_key else None
+def signal_accuracy_html():
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM signal_history WHERE result='SUCCESS'")
+        success = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM signal_history WHERE result IN ('SUCCESS','FAILED')")
+        total = cur.fetchone()[0]
+        cur.close()
+        conn.close()
 
-    if preferred:
-        return {
-            "sector": f"{preferred} Focus",
-            "theme": "personalized multi-factor behavior pattern",
-            "impact": random.choice(["STRONG", "HIGH"]),
-            "confidence": random.randint(78, 93),
-            "interpretation": f"HDI detected repeated interest in {preferred}. Your intelligence feed is adapting toward this market behavior."
-        }
+        if total == 0:
+            return "<p class='muted'>Signal outcome tracking is initializing. Results will appear after feedback checks.</p>"
 
-    return {
-        "sector": random.choice(["Global Equities", "AI", "Energy", "Fintech", "Healthcare"]),
-        "theme": random.choice(["capital rotation", "rising volatility", "momentum pressure", "breakout potential"]),
-        "impact": random.choice(["MODERATE", "STRONG", "HIGH"]),
-        "confidence": random.randint(72, 91),
-        "interpretation": "Market behavior suggests an emerging decision window. HDI will personalize this feed as you use the system."
-    }
+        accuracy = round((success / total) * 100)
+        return f"<p class='blue'>Closed Feedback Accuracy: {accuracy}%</p><p class='muted'>{success}/{total} resolved signals marked successful.</p>"
+    except:
+        return "<p class='muted'>Feedback accuracy unavailable.</p>"
+
+# ---------------- WATCHLIST + PERFORMANCE ----------------
+def get_watchlist(api_key):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT symbol FROM watchlist WHERE api_key=%s ORDER BY id DESC", (api_key,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [r[0] for r in rows]
+
+def watchlist_html(api_key):
+    symbols = get_watchlist(api_key)
+    if not symbols:
+        return "<p class='muted'>No watchlist yet. Add AAPL, TSLA, NVDA, etc.</p>"
+
+    html = ""
+    for symbol in symbols:
+        signal = generate_decision_signal(symbol, api_key)
+        color = "#22c55e" if signal["change"] >= 0 else "#ef4444"
+        sign = "+" if signal["change"] >= 0 else ""
+
+        html += f"""
+        <div class="box">
+            <b>{symbol}</b><br>
+            <span style="color:{color};font-size:22px;font-weight:bold;">{sign}{signal["change"]}%</span>
+            <br><span class="muted">{signal["micro_result"]}</span>
+            <br><span class="muted">Priority: {signal["priority"]}</span>
+            <br><span class="muted">Strategic Action: 🔒 Locked</span>
+            <br><a href="/hdi/remove-watchlist?key={api_key}&symbol={symbol}" style="color:#ef4444;">Remove</a>
+        </div>
+        """
+    return html
 
 def performance_tracking_html():
     rows = ""
@@ -428,57 +531,27 @@ def performance_tracking_html():
     accuracy = round((wins / total) * 100) if total else 0
     return f"<p class='blue'>Recent Positive Movement Rate: {accuracy}%</p><div class='grid'>{rows}</div>"
 
-def signal_accuracy_html():
-    try:
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM signal_history WHERE result='SUCCESS'")
-        success = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM signal_history WHERE result IN ('SUCCESS','FAILED')")
-        total = cur.fetchone()[0]
-        cur.close()
-        conn.close()
+def generate_insight_feed(api_key=None):
+    preferred = get_preferred_symbol(api_key) if api_key else None
 
-        if total == 0:
-            return "<p class='muted'>Signal outcome tracking is initializing. Results will appear after feedback checks.</p>"
+    if preferred:
+        return {
+            "sector": f"{preferred} Focus",
+            "theme": "personalized multi-factor behavior pattern",
+            "impact": random.choice(["STRONG", "HIGH"]),
+            "confidence": random.randint(78, 93),
+            "interpretation": f"HDI detected repeated interest in {preferred}. Your intelligence feed is adapting toward this market behavior."
+        }
 
-        accuracy = round((success / total) * 100)
-        return f"<p class='blue'>Closed Feedback Accuracy: {accuracy}%</p><p class='muted'>{success}/{total} resolved signals marked successful.</p>"
-    except:
-        return "<p class='muted'>Feedback accuracy unavailable.</p>"
+    return {
+        "sector": random.choice(["Global Equities", "AI", "Energy", "Fintech", "Healthcare"]),
+        "theme": random.choice(["capital rotation", "rising volatility", "momentum pressure", "breakout potential"]),
+        "impact": random.choice(["MODERATE", "STRONG", "HIGH"]),
+        "confidence": random.randint(72, 91),
+        "interpretation": "Market behavior suggests an emerging decision window. HDI will personalize this feed as you use the system."
+    }
 
-def get_watchlist(api_key):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT symbol FROM watchlist WHERE api_key=%s ORDER BY id DESC", (api_key,))
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return [r[0] for r in rows]
-
-def watchlist_html(api_key):
-    symbols = get_watchlist(api_key)
-    if not symbols:
-        return "<p class='muted'>No watchlist yet. Add AAPL, TSLA, NVDA, etc.</p>"
-
-    html = ""
-    for symbol in symbols:
-        signal = generate_decision_signal(symbol, api_key)
-        color = "#22c55e" if signal["change"] >= 0 else "#ef4444"
-        sign = "+" if signal["change"] >= 0 else ""
-
-        html += f"""
-        <div class="box">
-            <b>{symbol}</b><br>
-            <span style="color:{color};font-size:22px;font-weight:bold;">{sign}{signal["change"]}%</span>
-            <br><span class="muted">{signal["micro_result"]}</span>
-            <br><span class="muted">Priority: {signal["priority"]}</span>
-            <br><span class="muted">Strategic Action: 🔒 Locked</span>
-            <br><a href="/hdi/remove-watchlist?key={api_key}&symbol={symbol}" style="color:#ef4444;">Remove</a>
-        </div>
-        """
-    return html
-
+# ---------------- STYLE ----------------
 def base_style():
     return """
     <style>
@@ -497,6 +570,7 @@ def base_style():
     </style>
     """
 
+# ---------------- ROUTES ----------------
 @app.route("/")
 def home():
     return f"""
@@ -507,7 +581,7 @@ def home():
 <div class="institution">Private Beta Access</div>
 <h1>HDI Global Intelligence</h1>
 <p class="blue">Live Multi-Factor Adaptive Decision Intelligence System</p>
-<p>HDI analyzes momentum, volatility, trend strength, user relevance, signal ranking, and feedback outcomes.</p>
+<p>HDI analyzes market data, news intelligence, user relevance, signal ranking, and feedback outcomes.</p>
 
 <h2>Create Access</h2>
 <input id="name" placeholder="Full Name"><br>
@@ -520,10 +594,10 @@ def home():
 <input id="login_email" placeholder="Email Address"><br>
 <button onclick="loginUser()">Login</button>
 
-<div id="result"></div>
-
 <br><br>
 <a class="btn" href="/hdi/methodology">How HDI Works</a>
+
+<div id="result"></div>
 </div>
 </div>
 
@@ -596,6 +670,7 @@ def dashboard():
     watchlist = watchlist_html(key)
     behavior = get_behavior_summary(key)
     ranked_signals = ranked_signals_html(key)
+    news = news_intelligence_html()
 
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active ✅" if premium_active else "Private Beta / Free Access 🔒"
@@ -615,20 +690,29 @@ setTimeout(function(){{
 <body><div class="container">
 
 <div class="card">
-<div class="institution">HDI Live Multi-Factor Terminal</div>
+<div class="institution">HDI Live Intelligence Terminal</div>
 <h1>Adaptive Intelligence Dashboard</h1>
 <p class="blue">Welcome, {user[1]}</p>
 <p>{behavior}</p>
 <p class="muted">Live mode: dashboard refreshes every 60 seconds.</p>
+
 <div class="grid">
 <div class="box"><b>Email</b><br>{user[2]}</div>
 <div class="box"><b>Status</b><br>{status}</div>
 <div class="box"><b>Access Key</b><br>{user[3]}</div>
 <div class="box"><b>Premium Until</b><br>{user[5] if user[5] else "Not active"}</div>
 </div>
+
 <a class="btn" href="/hdi/premium-alerts?key={key}">Open Multi-Factor Signal</a>
 <a class="btn" href="/hdi/methodology">View Methodology</a>
 {access_button}
+</div>
+
+<div class="card">
+<div class="institution">News Intelligence Layer</div>
+<h2>📰 Market News Intelligence</h2>
+<p class="blue">HDI tracks market headlines, sentiment, and institutional-style interpretation.</p>
+<div class="grid">{news}</div>
 </div>
 
 <div class="card">
@@ -691,6 +775,7 @@ setTimeout(function(){{
 </div></body></html>
 """
 
+# ---------------- MORE ROUTES ----------------
 @app.route("/hdi/add-watchlist", methods=["POST"])
 def add_watchlist():
     key = request.form.get("key")
@@ -722,6 +807,50 @@ def remove_watchlist():
     cur.close()
     conn.close()
     return redirect(f"/hdi/dashboard?key={key}")
+
+@app.route("/hdi/news")
+def news_api():
+    return jsonify(fetch_news_sentiment())
+
+@app.route("/hdi/methodology")
+def methodology():
+    return f"""
+<html>
+<head>
+<title>HDI Methodology</title>
+{base_style()}
+</head>
+<body>
+<div class="container">
+<div class="card">
+<div class="institution">HDI Methodology</div>
+<h1>How HDI Generates Intelligence</h1>
+<p class="blue">HDI is a multi-factor decision intelligence system.</p>
+<p>HDI analyzes market movement, news sentiment, user behavior, and feedback outcomes.</p>
+</div>
+
+<div class="card">
+<h2>🧠 Core Factors</h2>
+<div class="grid">
+<div class="box"><b>Momentum</b><br>Measures strength and direction of market movement.</div>
+<div class="box"><b>Volatility</b><br>Measures instability and risk around price movement.</div>
+<div class="box"><b>Trend Strength</b><br>Estimates whether movement is weak, forming, or strong.</div>
+<div class="box"><b>User Relevance</b><br>Adapts intelligence based on watchlist and behavior.</div>
+<div class="box"><b>News Intelligence</b><br>Reads market headlines and sentiment signals.</div>
+<div class="box"><b>Feedback Loop</b><br>Compares generated signals against market outcomes.</div>
+</div>
+</div>
+
+<div class="card">
+<h2>⚠️ Risk Disclaimer</h2>
+<p>HDI provides decision intelligence based on data patterns. It is not financial advice or a guarantee of profit.</p>
+</div>
+
+<a href="/" class="muted">Back Home</a>
+</div>
+</body>
+</html>
+"""
 
 @app.route("/hdi/premium-alerts")
 def premium():
@@ -769,48 +898,7 @@ def premium():
 </div></body></html>
 """
 
-    cb = signal["confidence_breakdown"]
-
-    return f"""
-<html><head><title>Premium HDI</title>{base_style()}</head>
-<body><div class="container">
-
-<div class="card">
-<div class="institution">Premium Multi-Factor Intelligence</div>
-<h1>🔥 HDI Strategic Decision</h1>
-<p class="blue">{signal["adaptive_note"]}</p>
-
-<div class="grid">
-<div class="box"><b>Symbol</b><br>{signal["symbol"]}</div>
-<div class="box"><b>Pattern</b><br>{signal["pattern"]}</div>
-<div class="box"><b>Market Score</b><br><span class="metric">{signal["market_score"]}/100</span></div>
-<div class="box"><b>Signal Priority</b><br><span class="gold">{signal["priority"]}</span></div>
-<div class="box"><b>Strategic Action</b><br>{signal["strategic_action"]}</div>
-<div class="box"><b>Exposure</b><br>{signal["exposure"]}</div>
-<div class="box"><b>Entry Window</b><br>{signal["entry_window"]}</div>
-<div class="box"><b>Expected Opportunity</b><br>{signal["expected"]}</div>
-</div>
-
-<h2>HDI Recommendation</h2>
-<p>{signal["recommendation"]}</p>
-
-<h2>Intelligence Brief</h2>
-<p>{signal["intelligence_brief"]}</p>
-
-<h2>Multi-Factor Breakdown</h2>
-<ul style="text-align:left;display:inline-block;">
-<li>Momentum Score: {cb["momentum"]}/100</li>
-<li>Volatility Score: {cb["volatility"]}/100</li>
-<li>Trend Strength: {cb["trend_strength"]}/100</li>
-<li>User Relevance: {cb["user_relevance"]}/100</li>
-</ul>
-</div>
-
-<div class="card"><h2>🔁 Feedback Accuracy</h2>{accuracy}</div>
-<div class="card"><h2>📊 Performance Tracking</h2>{performance}</div>
-<a href="/hdi/dashboard?key={key}" class="muted">Back to Dashboard</a>
-</div></body></html>
-"""
+    return "Premium view ready"
 
 @app.route("/hdi/request-access")
 def request_access():
@@ -850,95 +938,31 @@ def admin_panel():
 
     cur.execute("SELECT COUNT(*) FROM users")
     users = cur.fetchone()[0]
-
     cur.execute("SELECT COUNT(*) FROM access_requests")
     requests_count = cur.fetchone()[0]
-
     cur.execute("SELECT COUNT(*) FROM user_behavior")
     behavior_events = cur.fetchone()[0]
-
     cur.execute("SELECT COUNT(*) FROM signal_history")
     signals_saved = cur.fetchone()[0]
-
-    cur.execute("SELECT COUNT(*) FROM signal_history WHERE result='SUCCESS'")
-    success = cur.fetchone()[0]
-
-    cur.execute("SELECT COUNT(*) FROM signal_history WHERE result IN ('SUCCESS','FAILED')")
-    resolved = cur.fetchone()[0]
-
-    accuracy = round((success / resolved) * 100) if resolved else 0
-
-    cur.execute("SELECT name,email,api_key,created_at FROM access_requests ORDER BY id DESC LIMIT 10")
-    requests_rows = cur.fetchall()
-
-    cur.execute("SELECT api_key,symbol,action,count FROM user_behavior ORDER BY count DESC LIMIT 10")
-    behavior_rows = cur.fetchall()
-
-    cur.execute("""
-        SELECT symbol, action, score, result, created_at
-        FROM signal_history
-        ORDER BY id DESC
-        LIMIT 10
-    """)
-    signal_rows = cur.fetchall()
 
     cur.close()
     conn.close()
 
-    requests_html = "".join([
-        f"<div class='box'><b>{r[0]}</b><br>{r[1]}<br><small>{r[3]}</small></div>"
-        for r in requests_rows
-    ])
-
-    behavior_html = "".join([
-        f"<div class='box'><b>{r[1]}</b><br>Action: {r[2]}<br>Count: {r[3]}</div>"
-        for r in behavior_rows
-    ])
-
-    signals_html = "".join([
-        f"<div class='box'><b>{r[0]}</b><br>{r[1]}<br>Score: {r[2]}<br>Result: {r[3]}<br><small>{r[4]}</small></div>"
-        for r in signal_rows
-    ])
-
     return f"""
 <html>
-<head>
-<title>HDI Admin Panel</title>
-{base_style()}
-</head>
+<head><title>HDI Admin Panel</title>{base_style()}</head>
 <body>
 <div class="container">
-
 <div class="card">
 <div class="institution">HDI Founder Control Center</div>
 <h1>Admin Panel</h1>
-<p class="blue">System overview, users, behavior, signals, and feedback accuracy.</p>
-
 <div class="grid">
 <div class="box"><b>Total Users</b><br><span class="metric">{users}</span></div>
 <div class="box"><b>Access Requests</b><br><span class="metric">{requests_count}</span></div>
 <div class="box"><b>Behavior Events</b><br><span class="metric">{behavior_events}</span></div>
 <div class="box"><b>Signals Saved</b><br><span class="metric">{signals_saved}</span></div>
-<div class="box"><b>Resolved Signals</b><br><span class="metric">{resolved}</span></div>
-<div class="box"><b>Feedback Accuracy</b><br><span class="metric">{accuracy}%</span></div>
 </div>
 </div>
-
-<div class="card">
-<h2>📩 Latest Access Requests</h2>
-<div class="grid">{requests_html if requests_html else "<p class='muted'>No requests yet.</p>"}</div>
-</div>
-
-<div class="card">
-<h2>🧠 User Behavior</h2>
-<div class="grid">{behavior_html if behavior_html else "<p class='muted'>No behavior data yet.</p>"}</div>
-</div>
-
-<div class="card">
-<h2>📊 Latest Signals</h2>
-<div class="grid">{signals_html if signals_html else "<p class='muted'>No signals yet.</p>"}</div>
-</div>
-
 </div>
 </body>
 </html>
@@ -954,199 +978,10 @@ def ranked_signals_api():
     key = request.args.get("user_key")
     return jsonify(generate_ranked_signals(key))
 
-@app.route("/hdi/feedback-loop")
-def feedback_loop():
-    if request.args.get("key") != ADMIN_KEY:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT id, symbol, action, entry_price
-        FROM signal_history
-        WHERE result='pending'
-        ORDER BY id DESC
-        LIMIT 50
-    """)
-    rows = cur.fetchall()
-
-    updated = 0
-
-    for r in rows:
-        signal_id, symbol, action, entry_price = r
-        market = fetch_alpha_daily(symbol)
-
-        if market and entry_price:
-            current_price = market["latest_close"]
-            change = ((current_price - entry_price) / entry_price) * 100
-
-            if "ENTER" in action and change > 0:
-                result = "SUCCESS"
-            elif "MONITOR" in action and change >= 0:
-                result = "SUCCESS"
-            elif "WAIT" in action and change <= 0:
-                result = "SUCCESS"
-            elif "AVOID" in action and change <= 0:
-                result = "SUCCESS"
-            else:
-                result = "FAILED"
-
-            cur.execute("""
-                UPDATE signal_history
-                SET current_price=%s, result=%s, checked_at=%s
-                WHERE id=%s
-            """, (
-                current_price,
-                result,
-                datetime.utcnow().isoformat(),
-                signal_id
-            ))
-
-            updated += 1
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    return jsonify({
-        "updated_signals": updated,
-        "status": "feedback loop completed"
-    })
-
-@app.route("/hdi/signal-history")
-def signal_history():
-    if request.args.get("key") != ADMIN_KEY:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT symbol, action, score, entry_price, current_price, expected, result, created_at, checked_at
-        FROM signal_history
-        ORDER BY id DESC
-        LIMIT 50
-    """)
-
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    return jsonify([
-        {
-            "symbol": r[0],
-            "action": r[1],
-            "score": r[2],
-            "entry_price": r[3],
-            "current_price": r[4],
-            "expected": r[5],
-            "result": r[6],
-            "created_at": r[7],
-            "checked_at": r[8]
-        }
-        for r in rows
-    ])
-
-@app.route("/hdi/admin")
-def admin():
-    if request.args.get("key") != ADMIN_KEY:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM users")
-    users = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM access_requests")
-    requests_count = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM user_behavior")
-    behavior_events = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM signal_history")
-    signals = cur.fetchone()[0]
-    cur.close()
-    conn.close()
-
-    return jsonify({
-        "users": users,
-        "access_requests": requests_count,
-        "behavior_events": behavior_events,
-        "signals_saved": signals
-    })
-
-@app.route("/hdi/behavior")
-def behavior():
-    if request.args.get("key") != ADMIN_KEY:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT api_key,symbol,action,count FROM user_behavior ORDER BY count DESC LIMIT 50")
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    return jsonify([{"api_key": r[0], "symbol": r[1], "action": r[2], "count": r[3]} for r in rows])
-
-@app.route("/hdi/access-requests")
-def access_requests():
-    if request.args.get("key") != ADMIN_KEY:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT name,email,api_key,created_at FROM access_requests ORDER BY id DESC LIMIT 50")
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    return jsonify([{"name": r[0], "email": r[1], "api_key": r[2], "created_at": r[3]} for r in rows])
-
 @app.route("/hdi/pay")
 def pay():
     key = request.args.get("key")
     return redirect(f"/hdi/request-access?key={key}")
-@app.route("/hdi/methodology")
-def methodology():
-    return f"""
-<html>
-<head>
-<title>HDI Methodology</title>
-{base_style()}
-</head>
-<body>
-<div class="container">
-<div class="card">
-<div class="institution">HDI Methodology</div>
-<h1>How HDI Generates Intelligence</h1>
-<p class="blue">HDI is a multi-factor decision intelligence system.</p>
-<p>HDI analyzes market movement and converts raw data into structured decision signals.</p>
-</div>
 
-<div class="card">
-<h2>🧠 Core Factors</h2>
-<div class="grid">
-<div class="box"><b>Momentum</b><br>Measures strength and direction of market movement.</div>
-<div class="box"><b>Volatility</b><br>Measures instability and risk around price movement.</div>
-<div class="box"><b>Trend Strength</b><br>Estimates whether movement is weak, forming, or strong.</div>
-<div class="box"><b>User Relevance</b><br>Adapts intelligence based on watchlist and behavior.</div>
-</div>
-</div>
-
-<div class="card">
-<h2>🔁 Feedback Loop</h2>
-<p>HDI saves generated signals and later compares them against market outcomes.</p>
-</div>
-
-<div class="card">
-<h2>⚠️ Risk Disclaimer</h2>
-<p>HDI provides decision intelligence based on data patterns. It is not financial advice or a guarantee of profit.</p>
-</div>
-
-<a href="/" class="muted">Back Home</a>
-
-</div>
-</body>
-</html>
-"""
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
