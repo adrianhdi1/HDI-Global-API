@@ -521,6 +521,9 @@ def home():
 <button onclick="loginUser()">Login</button>
 
 <div id="result"></div>
+
+<br><br>
+<a class="btn" href="/hdi/methodology">How HDI Works</a>
 </div>
 </div>
 
@@ -624,6 +627,7 @@ setTimeout(function(){{
 <div class="box"><b>Premium Until</b><br>{user[5] if user[5] else "Not active"}</div>
 </div>
 <a class="btn" href="/hdi/premium-alerts?key={key}">Open Multi-Factor Signal</a>
+<a class="btn" href="/hdi/methodology">View Methodology</a>
 {access_button}
 </div>
 
