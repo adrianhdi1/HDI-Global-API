@@ -625,8 +625,9 @@ def base_style():
     input,select{padding:14px;margin:8px;width:80%;border-radius:10px;border:1px solid #334155;background:#020617;color:white;}
     button,.btn,.pay{display:inline-block;padding:14px 26px;border-radius:12px;border:none;text-decoration:none;color:white;font-weight:bold;margin-top:12px;cursor:pointer;}
     button,.btn{background:#2563eb;} .pay{background:#16a34a;}
-    .box{background:#0b1220;border:1px solid rgba(148,163,184,.16);padding:18px;margin:12px;border-radius:14px;text-align:left;}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .box{background:rgba(15,23,42,.55);backdrop-filter:blur(10px);border:1px solid rgba(56,189,248,.08);padding:16px;margin:8px;border-radius:18px;text-align:left;transition:.25s;}
+    .box:hover{transform:translateY(-2px);border:1px solid rgba(56,189,248,.25);}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;}
     .blue{color:#38bdf8;font-weight:bold;} .gold{color:#facc15;font-weight:bold;} .muted{color:#94a3b8;font-size:14px;}
     .metric{font-size:30px;font-weight:bold;color:#38bdf8;} .locked{filter:blur(3px);opacity:.55;}
     .nav{position:sticky;top:0;z-index:99;background:#020617;border:1px solid rgba(56,189,248,.18);border-radius:16px;padding:14px;margin-bottom:22px;}
@@ -1043,4 +1044,3 @@ def pay():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-
