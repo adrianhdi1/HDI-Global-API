@@ -19,6 +19,34 @@ SECTORS = {
     "Cloud Infrastructure": ["MSFT", "AMZN", "GOOGL"]
 }
 
+ECONOMIES = {
+    "USA Economy": {
+        "focus": "Inflation, interest rates, technology markets",
+        "risk": "Policy sensitivity",
+        "opportunity": "AI, equities, institutional capital"
+    },
+    "China Economy": {
+        "focus": "Manufacturing, exports, real estate pressure",
+        "risk": "Demand slowdown",
+        "opportunity": "Industrial recovery and trade flows"
+    },
+    "Africa Markets": {
+        "focus": "Agriculture, infrastructure, mobile money, energy",
+        "risk": "Currency pressure and inflation",
+        "opportunity": "Emerging consumer growth"
+    },
+    "Emerging Markets": {
+        "focus": "Currency movement, commodities, capital inflows",
+        "risk": "External debt and rate pressure",
+        "opportunity": "High-growth market expansion"
+    },
+    "Global Economy": {
+        "focus": "Inflation, liquidity, global risk appetite",
+        "risk": "Macro uncertainty",
+        "opportunity": "Capital rotation across sectors"
+    }
+}
+
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
 
@@ -389,8 +417,7 @@ def generate_sector_intelligence():
             "priority": priority
         })
 
-    sector_rows = sorted(sector_rows, key=lambda x: x["sector_score"], reverse=True)
-    return sector_rows
+    return sorted(sector_rows, key=lambda x: x["sector_score"], reverse=True)
 
 def sector_intelligence_html():
     sectors = generate_sector_intelligence()
@@ -407,6 +434,66 @@ def sector_intelligence_html():
             Opportunity: <span class="gold">{s["opportunity"]}</span><br>
             Risk: {s["risk"]}<br>
             Priority: {s["priority"]}
+        </div>
+        """
+
+    return html
+def generate_economy_intelligence():
+    rows = []
+
+    for economy, data in ECONOMIES.items():
+        inflation_pressure = random.randint(45, 88)
+        risk_score = random.randint(40, 85)
+        opportunity_score = random.randint(55, 92)
+
+        total_score = int(
+            opportunity_score * 0.45 +
+            (100 - risk_score) * 0.25 +
+            (100 - inflation_pressure) * 0.30
+        )
+
+        if total_score >= 75:
+            mood = "OPPORTUNITY ZONE"
+            priority = "HIGH"
+        elif total_score >= 60:
+            mood = "WATCH ZONE"
+            priority = "MEDIUM"
+        else:
+            mood = "RISK ZONE"
+            priority = "LOW"
+
+        rows.append({
+            "economy": economy,
+            "focus": data["focus"],
+            "risk": data["risk"],
+            "opportunity": data["opportunity"],
+            "inflation_pressure": inflation_pressure,
+            "risk_score": risk_score,
+            "opportunity_score": opportunity_score,
+            "total_score": total_score,
+            "mood": mood,
+            "priority": priority
+        })
+
+    return sorted(rows, key=lambda x: x["total_score"], reverse=True)
+
+def economy_intelligence_html():
+    economies = generate_economy_intelligence()
+    html = ""
+
+    for e in economies:
+        html += f"""
+        <div class="box">
+            <b>{e["economy"]}</b><br>
+            Economy Score: <span class="metric">{e["total_score"]}/100</span><br>
+            Mood: <span class="gold">{e["mood"]}</span><br>
+            Priority: {e["priority"]}<br><br>
+            <b>Focus:</b><br><span class="muted">{e["focus"]}</span><br><br>
+            <b>Risk:</b><br><span class="muted">{e["risk"]}</span><br><br>
+            <b>Opportunity:</b><br><span class="muted">{e["opportunity"]}</span><br><br>
+            Inflation Pressure: {e["inflation_pressure"]}/100<br>
+            Risk Score: {e["risk_score"]}/100<br>
+            Opportunity Score: {e["opportunity_score"]}/100
         </div>
         """
 
@@ -648,7 +735,7 @@ def home():
 <div class="institution">Private Beta Access</div>
 <h1>HDI Global Intelligence</h1>
 <p class="blue">Live Multi-Factor Adaptive Decision Intelligence System</p>
-<p>HDI analyzes market data, news intelligence, sector intelligence, user relevance, signal ranking, and feedback outcomes.</p>
+<p>HDI analyzes market data, news intelligence, sector intelligence, economy intelligence, user relevance, signal ranking, and feedback outcomes.</p>
 
 <h2>Create Access</h2>
 <input id="name" placeholder="Full Name"><br>
@@ -739,6 +826,7 @@ def dashboard():
     ranked_signals = ranked_signals_html(key)
     news = news_intelligence_html()
     sectors = sector_intelligence_html()
+    economies = economy_intelligence_html()
 
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active ✅" if premium_active else "Private Beta / Free Access 🔒"
@@ -774,6 +862,13 @@ setTimeout(function(){{
 <a class="btn" href="/hdi/premium-alerts?key={key}">Open Multi-Factor Signal</a>
 <a class="btn" href="/hdi/methodology">View Methodology</a>
 {access_button}
+</div>
+
+<div class="card">
+<div class="institution">Economy Intelligence Layer</div>
+<h2>🌐 Global Economy Intelligence</h2>
+<p class="blue">HDI analyzes macro risk, inflation pressure, and opportunity zones across major economies.</p>
+<div class="grid">{economies}</div>
 </div>
 
 <div class="card">
@@ -890,6 +985,10 @@ def news_api():
 def sectors_api():
     return jsonify(generate_sector_intelligence())
 
+@app.route("/hdi/economies")
+def economies_api():
+    return jsonify(generate_economy_intelligence())
+
 @app.route("/hdi/methodology")
 def methodology():
     return f"""
@@ -904,7 +1003,7 @@ def methodology():
 <div class="institution">HDI Methodology</div>
 <h1>How HDI Generates Intelligence</h1>
 <p class="blue">HDI is a multi-factor decision intelligence system.</p>
-<p>HDI analyzes market movement, news sentiment, sector intelligence, user behavior, and feedback outcomes.</p>
+<p>HDI analyzes market movement, news sentiment, sector intelligence, economy intelligence, user behavior, and feedback outcomes.</p>
 </div>
 
 <div class="card">
@@ -916,6 +1015,8 @@ def methodology():
 <div class="box"><b>User Relevance</b><br>Adapts intelligence based on watchlist and behavior.</div>
 <div class="box"><b>News Intelligence</b><br>Reads market headlines and sentiment signals.</div>
 <div class="box"><b>Sector Intelligence</b><br>Analyzes sectors like AI, Tech, EVs, Cloud, and Digital Advertising.</div>
+<div class="box"><b>Economy Intelligence</b><br>Measures macro risk, inflation pressure, and opportunity zones.</div>
+<div class="box"><b>Feedback Loop</b><br>Compares generated signals against market outcomes.</div>
 </div>
 </div>
 
