@@ -1101,6 +1101,48 @@ def access_requests():
 def pay():
     key = request.args.get("key")
     return redirect(f"/hdi/request-access?key={key}")
+@app.route("/hdi/methodology")
+def methodology():
+    return f"""
+<html>
+<head>
+<title>HDI Methodology</title>
+{base_style()}
+</head>
+<body>
+<div class="container">
+<div class="card">
+<div class="institution">HDI Methodology</div>
+<h1>How HDI Generates Intelligence</h1>
+<p class="blue">HDI is a multi-factor decision intelligence system.</p>
+<p>HDI analyzes market movement and converts raw data into structured decision signals.</p>
+</div>
 
+<div class="card">
+<h2>🧠 Core Factors</h2>
+<div class="grid">
+<div class="box"><b>Momentum</b><br>Measures strength and direction of market movement.</div>
+<div class="box"><b>Volatility</b><br>Measures instability and risk around price movement.</div>
+<div class="box"><b>Trend Strength</b><br>Estimates whether movement is weak, forming, or strong.</div>
+<div class="box"><b>User Relevance</b><br>Adapts intelligence based on watchlist and behavior.</div>
+</div>
+</div>
+
+<div class="card">
+<h2>🔁 Feedback Loop</h2>
+<p>HDI saves generated signals and later compares them against market outcomes.</p>
+</div>
+
+<div class="card">
+<h2>⚠️ Risk Disclaimer</h2>
+<p>HDI provides decision intelligence based on data patterns. It is not financial advice or a guarantee of profit.</p>
+</div>
+
+<a href="/" class="muted">Back Home</a>
+
+</div>
+</body>
+</html>
+"""
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
