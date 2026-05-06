@@ -255,21 +255,21 @@ def generate_decision_signal(symbol=None, api_key=None):
     priority = factors["priority"]
     if score >= 88 and change > 0:
         action = "ENTER POSITION WITH CONTROLLED EXPOSURE"
-        exposure = "20% â 30%"
+        exposure = "20% â 30%"
         risk = "MODERATE"
         pattern = "Multi-Factor Momentum Breakout"
         brief = "HDI detects strong alignment between momentum, trend strength, and market relevance."
-        recommendation = "HDI Recommendation: Consider entry within the next 2â4 hours while momentum remains active."
+        recommendation = "HDI Recommendation: Consider entry within the next 2â4 hours while momentum remains active."
     elif score >= 76:
         action = "MONITOR CLOSELY"
-        exposure = "10% â 20%"
+        exposure = "10% â 20%"
         risk = "CONTROLLED"
         pattern = "Adaptive Growth Pattern"
         brief = "HDI detects improving conditions, but confirmation is still developing."
         recommendation = "HDI Recommendation: Monitor closely and wait for confirmation before increasing exposure."
     elif score >= 64:
         action = "WAIT FOR CONFIRMATION"
-        exposure = "0% â 10%"
+        exposure = "0% â 10%"
         risk = "MODERATE"
         pattern = "Confirmation Pending Pattern"
         brief = "HDI detects partial alignment, but not enough strength for a decisive move."
@@ -421,12 +421,12 @@ def ranked_signals_html(api_key):
     for i, s in enumerate(generate_ranked_signals(api_key), 1):
         html += f"""
         <div class="box">
-            <b>#{i} â {s["symbol"]}</b><br>
+            <b>#{i} â {s["symbol"]}</b><br>
             Pattern: {s["pattern"]}<br>
             Score: <span class="metric">{s["market_score"]}/100</span><br>
             Priority: <span class="gold">{s["priority"]}</span><br>
             HDI Recommendation: {s["recommendation"]}<br>
-            <span class="muted">Strategic Action: ð Locked</span>
+            <span class="muted">Strategic Action: ð Locked</span>
         </div>
         """
     return html
@@ -511,7 +511,7 @@ def watchlist_html(api_key):
             <span style="color:{color};font-size:22px;font-weight:bold;">{sign}{signal["change"]}%</span>
             <br><span class="muted">{signal["micro_result"]}</span>
             <br><span class="muted">Priority: {signal["priority"]}</span>
-            <br><span class="muted">Strategic Action: ð Locked</span>
+            <br><span class="muted">Strategic Action: ð Locked</span>
             <br><a href="/hdi/remove-watchlist?key={api_key}&symbol={symbol}" style="color:#ef4444;">Remove</a>
         </div>
         """
@@ -613,6 +613,96 @@ def portfolio_intelligence_html(api_key):
     </div>
     """
     return summary + "<div class='grid'>" + rows + "</div>"
+
+
+def executive_brief_html(api_key):
+    try:
+        top_signal = generate_ranked_signals(api_key, limit=1)[0]
+    except:
+        top_signal = generate_decision_signal(api_key=api_key)
+
+    try:
+        sectors = generate_sector_intelligence()
+        strongest_sector = sectors[0] if sectors else None
+    except:
+        strongest_sector = None
+
+    try:
+        economies = generate_economy_intelligence()
+        top_economy = economies[0] if economies else None
+    except:
+        top_economy = None
+
+    try:
+        holdings = get_portfolio(api_key)
+        if holdings:
+            total_amount = sum([float(h[2]) for h in holdings])
+            risk_total = 0
+            for holding_id, symbol, amount in holdings:
+                signal = generate_decision_signal(symbol, api_key)
+                weight = (float(amount) / total_amount) if total_amount else 0
+                risk_total += (100 - signal["market_score"]) * weight
+            portfolio_risk = round(risk_total, 1)
+        else:
+            portfolio_risk = "Not active"
+    except:
+        portfolio_risk = "Unavailable"
+
+    try:
+        news = fetch_news_sentiment()
+        if news:
+            sentiment = news[0].get("overall_sentiment_label", "Neutral")
+        else:
+            sentiment = "Neutral"
+    except:
+        sentiment = "Neutral"
+
+    sector_name = strongest_sector["sector"] if strongest_sector else "Analyzing"
+    sector_score = strongest_sector["sector_score"] if strongest_sector else "--"
+
+    economy_name = top_economy["economy"] if top_economy else "Analyzing"
+    economy_mood = top_economy["mood"] if top_economy else "WATCH ZONE"
+
+    return f"""
+    <div class="card" id="brief">
+    <div class="institution">Executive Brief</div>
+    <h2>â¡ HDI Intelligence Summary</h2>
+    <p class="blue">Fast institutional overview of the most important decision signals.</p>
+
+    <div class="grid">
+        <div class="box">
+            <b>Top Signal</b><br>
+            {top_signal["symbol"]}<br>
+            <span class="metric">{top_signal["market_score"]}/100</span><br>
+            <span class="gold">{top_signal["priority"]}</span>
+        </div>
+
+        <div class="box">
+            <b>Portfolio Risk</b><br>
+            <span class="metric">{portfolio_risk}</span><br>
+            <span class="muted">Based on current holdings</span>
+        </div>
+
+        <div class="box">
+            <b>Strongest Sector</b><br>
+            {sector_name}<br>
+            <span class="metric">{sector_score}/100</span>
+        </div>
+
+        <div class="box">
+            <b>Economy Mood</b><br>
+            {economy_name}<br>
+            <span class="gold">{economy_mood}</span>
+        </div>
+
+        <div class="box">
+            <b>Market Sentiment</b><br>
+            <span class="gold">{sentiment}</span><br>
+            <span class="muted">News Intelligence Layer</span>
+        </div>
+    </div>
+    </div>
+    """
 
 def base_style():
     return """
@@ -742,8 +832,9 @@ def dashboard():
     sectors = sector_intelligence_html()
     economies = economy_intelligence_html()
     portfolio = portfolio_intelligence_html(key)
+    brief = executive_brief_html(key)
     premium_active = is_premium(user[4], user[5])
-    status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
+    status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
     return f"""
 <html>
@@ -751,6 +842,7 @@ def dashboard():
 <body><div class="container">
 <div class="nav">
 <a href="/hdi/profile?key={key}">Profile</a>
+<a href="#brief">Brief</a>
 <a href="#portfolio">Portfolio</a>
 <a href="#economy">Economy</a>
 <a href="#sectors">Sectors</a>
@@ -776,9 +868,10 @@ def dashboard():
 <a class="btn" href="/hdi/methodology">View Methodology</a>
 {access_button}
 </div>
+{brief}
 <div class="card" id="portfolio">
 <div class="institution">Portfolio Intelligence Layer</div>
-<h2>ð¼ Personal Portfolio Intelligence</h2>
+<h2>ð¼ Personal Portfolio Intelligence</h2>
 <p class="blue">HDI analyzes your holdings, exposure, risk, strongest and weakest positions.</p>
 <form action="/hdi/add-portfolio" method="POST">
 <input type="hidden" name="key" value="{key}">
@@ -788,13 +881,13 @@ def dashboard():
 </form>
 {portfolio}
 </div>
-<div class="card" id="economy"><div class="institution">Economy Intelligence Layer</div><h2>ð Global Economy Intelligence</h2><div class="grid">{economies}</div></div>
-<div class="card" id="sectors"><div class="institution">Sector Intelligence Layer</div><h2>ð Global Sector Intelligence</h2><div class="grid">{sectors}</div></div>
-<div class="card" id="news"><div class="institution">News Intelligence Layer</div><h2>ð° Market News Intelligence</h2><div class="grid">{news}</div></div>
-<div class="card" id="signals"><div class="institution">Live Signal Ranking</div><h2>ð¥ Top Ranked Signals</h2><div class="grid">{ranked_signals}</div></div>
+<div class="card" id="economy"><div class="institution">Economy Intelligence Layer</div><h2>ð Global Economy Intelligence</h2><div class="grid">{economies}</div></div>
+<div class="card" id="sectors"><div class="institution">Sector Intelligence Layer</div><h2>ð Global Sector Intelligence</h2><div class="grid">{sectors}</div></div>
+<div class="card" id="news"><div class="institution">News Intelligence Layer</div><h2>ð° Market News Intelligence</h2><div class="grid">{news}</div></div>
+<div class="card" id="signals"><div class="institution">Live Signal Ranking</div><h2>ð¥ Top Ranked Signals</h2><div class="grid">{ranked_signals}</div></div>
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
-<h2>ð§  Multi-Factor Signal Engine</h2>
+<h2>ð§  Multi-Factor Signal Engine</h2>
 <p class="blue">{signal["adaptive_note"]}</p>
 <div class="grid">
 <div class="box"><b>Priority Symbol</b><br>{signal["symbol"]}</div>
@@ -804,7 +897,7 @@ def dashboard():
 <div class="box"><b>HDI Recommendation</b><br>{signal["recommendation"]}</div>
 <div class="box"><b>Micro Result</b><br>{signal["micro_result"]}</div>
 </div></div>
-<div class="card"><div class="institution">Feedback Loop</div><h2>ð Closed Learning System</h2>{accuracy}</div>
+<div class="card"><div class="institution">Feedback Loop</div><h2>ð Closed Learning System</h2>{accuracy}</div>
 <div class="card">
 <div class="institution">Adaptive Insight Feed</div>
 <h2>Market Intelligence Pulse</h2>
@@ -815,7 +908,7 @@ def dashboard():
 <div class="box"><b>Confidence</b><br>{insight["confidence"]}%</div>
 </div><p>{insight["interpretation"]}</p></div>
 <div class="card" id="watchlist">
-<h2>â­ Personal Watchlist</h2>
+<h2>â­ Personal Watchlist</h2>
 <form action="/hdi/add-watchlist" method="POST">
 <input type="hidden" name="key" value="{key}">
 <select name="symbol"><option>AAPL</option><option>MSFT</option><option>TSLA</option><option>NVDA</option><option>AMZN</option><option>GOOGL</option><option>META</option></select><br>
@@ -823,7 +916,7 @@ def dashboard():
 </form>
 <div class="grid">{watchlist}</div>
 </div>
-<div class="card" id="performance"><h2>ð HDI Performance Layer</h2>{performance}</div>
+<div class="card" id="performance"><h2>ð HDI Performance Layer</h2>{performance}</div>
 <a href="/" class="muted">Logout</a>
 </div></body></html>
 """
@@ -932,7 +1025,7 @@ def methodology():
 <p>HDI analyzes market movement, news sentiment, sector intelligence, economy intelligence, portfolio exposure, user behavior, and feedback outcomes.</p>
 </div>
 <div class="card">
-<h2>â ï¸ Risk Disclaimer</h2>
+<h2>â ï¸ Risk Disclaimer</h2>
 <p>HDI provides decision intelligence based on data patterns. It is not financial advice or a guarantee of profit.</p>
 </div>
 <a href="/" class="muted">Back Home</a>
@@ -972,8 +1065,8 @@ def premium():
 </div>
 <a class="pay" href="/hdi/request-access?key={key}">Request Institutional Access</a>
 </div>
-<div class="card"><h2>ð Feedback Accuracy</h2>{accuracy}</div>
-<div class="card"><h2>ð Performance Preview</h2>{performance}</div>
+<div class="card"><h2>ð Feedback Accuracy</h2>{accuracy}</div>
+<div class="card"><h2>ð Performance Preview</h2>{performance}</div>
 <a href="/hdi/dashboard?key={key}" class="muted">Back to Dashboard</a>
 </div></body></html>
 """
@@ -1044,3 +1137,4 @@ def pay():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
