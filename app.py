@@ -81,6 +81,13 @@ def init_db():
         amount REAL,
         created_at TEXT
     )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS user_preferences (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT UNIQUE,
+        risk_profile TEXT DEFAULT 'Balanced',
+        created_at TEXT
+    )""")
     conn.commit()
     cur.close()
     conn.close()
@@ -623,6 +630,291 @@ def portfolio_intelligence_html(api_key):
 
 
 
+
+
+
+def get_user_risk_profile(api_key):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT risk_profile FROM user_preferences WHERE api_key=%s", (api_key,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return row[0] if row else "Balanced"
+    except:
+        return "Balanced"
+
+def set_user_risk_profile(api_key, risk_profile):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO user_preferences(api_key,risk_profile,created_at)
+            VALUES(%s,%s,%s)
+            ON CONFLICT (api_key)
+            DO UPDATE SET risk_profile=EXCLUDED.risk_profile
+        """, (api_key, risk_profile, datetime.utcnow().isoformat()))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except:
+        pass
+
+def company_intelligence_data(symbol, api_key=None):
+    signal = generate_decision_signal(symbol=symbol, api_key=api_key)
+    sector = "General Markets"
+    for sector_name, symbols in SECTORS.items():
+        if symbol in symbols:
+            sector = sector_name
+            break
+
+    score = signal["market_score"]
+    if score >= 80:
+        growth_label = "Strong growth pressure"
+        business_quality = "High-quality market attention"
+    elif score >= 65:
+        growth_label = "Developing growth pattern"
+        business_quality = "Moderate-quality setup"
+    else:
+        growth_label = "Weak or uncertain growth pattern"
+        business_quality = "Requires stronger confirmation"
+
+    return {
+        "symbol": symbol,
+        "sector": sector,
+        "market_score": score,
+        "priority": signal["priority"],
+        "pattern": signal["pattern"],
+        "growth_label": growth_label,
+        "business_quality": business_quality,
+        "risk_note": "Monitor volatility, news sentiment, sector rotation, and market confirmation.",
+        "opportunity_note": signal["recommendation"]
+    }
+
+def company_intelligence_html(api_key):
+    html = ""
+    for symbol in SYMBOLS:
+        c = company_intelligence_data(symbol, api_key)
+        html += f"""
+        <div class="box">
+            <b>{c["symbol"]}</b><br>
+            Sector: {c["sector"]}<br>
+            Company Score: <span class="metric">{c["market_score"]}/100</span><br>
+            Priority: <span class="gold">{c["priority"]}</span><br>
+            Pattern: {c["pattern"]}<br>
+            Business Quality: {c["business_quality"]}<br>
+            Growth View: <span class="blue">{c["growth_label"]}</span>
+        </div>
+        """
+    return html
+
+def notification_center_html(api_key):
+    notifications = []
+
+    try:
+        top_signal = generate_ranked_signals(api_key, limit=1)[0]
+        notifications.append({
+            "title": f"Top signal: {top_signal['symbol']}",
+            "body": f"{top_signal['priority']} priority with score {top_signal['market_score']}/100.",
+            "level": top_signal["priority"]
+        })
+    except:
+        pass
+
+    try:
+        holdings = get_portfolio(api_key)
+        if holdings:
+            total_amount = sum([float(h[2]) for h in holdings])
+            risk_total = 0
+            for holding_id, symbol, amount in holdings:
+                s = generate_decision_signal(symbol=symbol, api_key=api_key)
+                weight = float(amount) / total_amount if total_amount else 0
+                risk_total += (100 - s["market_score"]) * weight
+            portfolio_risk = round(risk_total, 1)
+            notifications.append({
+                "title": "Portfolio risk update",
+                "body": f"Current portfolio risk pressure: {portfolio_risk}/100.",
+                "level": "RISK" if portfolio_risk >= 45 else "WATCH"
+            })
+        else:
+            notifications.append({
+                "title": "Portfolio not active",
+                "body": "Add holdings to unlock deeper portfolio notifications.",
+                "level": "INFO"
+            })
+    except:
+        pass
+
+    try:
+        sectors = generate_sector_intelligence()
+        if sectors:
+            top_sector = sectors[0]
+            notifications.append({
+                "title": f"Sector pulse: {top_sector['sector']}",
+                "body": f"Sector score {top_sector['sector_score']}/100. {top_sector['opportunity']}",
+                "level": top_sector["priority"]
+            })
+    except:
+        pass
+
+    try:
+        news = fetch_news_sentiment()
+        if news:
+            notifications.append({
+                "title": "News intelligence update",
+                "body": news[0].get("title", "Market news detected")[:150],
+                "level": news[0].get("overall_sentiment_label", "Neutral")
+            })
+    except:
+        pass
+
+    html = ""
+    for n in notifications[:8]:
+        html += f"""
+        <div class="box">
+            <b>{n["title"]}</b><br>
+            <span class="muted">{n["body"]}</span><br>
+            <span class="gold">{n["level"]}</span>
+        </div>
+        """
+    return html
+
+def ai_report_html(api_key):
+    user = get_user_by_key(api_key)
+    if not user:
+        return "<p>Invalid user.</p>"
+
+    top_signal = generate_ranked_signals(api_key, limit=1)[0]
+    risk_profile = get_user_risk_profile(api_key)
+
+    try:
+        sectors = generate_sector_intelligence()
+        top_sector = sectors[0]
+    except:
+        top_sector = None
+
+    try:
+        economies = generate_economy_intelligence()
+        top_economy = economies[0]
+    except:
+        top_economy = None
+
+    try:
+        holdings = get_portfolio(api_key)
+        holdings_count = len(holdings)
+    except:
+        holdings_count = 0
+
+    sector_line = f"{top_sector['sector']} leads with score {top_sector['sector_score']}/100." if top_sector else "Sector intelligence is forming."
+    economy_line = f"{top_economy['economy']} shows {top_economy['mood']}." if top_economy else "Economy intelligence is forming."
+
+    return f"""
+    <div class="card">
+        <div class="institution">HDI AI Report Generator</div>
+        <h1>HDI Intelligence Report</h1>
+        <p class="blue">Generated for {user[1]} â {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}</p>
+
+        <div class="grid">
+            <div class="box"><b>Risk Profile</b><br><span class="metric">{risk_profile}</span></div>
+            <div class="box"><b>Top Signal</b><br>{top_signal['symbol']}<br><span class="metric">{top_signal['market_score']}/100</span></div>
+            <div class="box"><b>Portfolio Holdings</b><br><span class="metric">{holdings_count}</span></div>
+            <div class="box"><b>Top Sector</b><br><span class="gold">{sector_line}</span></div>
+            <div class="box"><b>Macro View</b><br><span class="gold">{economy_line}</span></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Executive Summary</h2>
+        <p>
+        HDI detects {top_signal['symbol']} as the current leading signal with {top_signal['priority']} priority.
+        The system recommends monitoring momentum, volatility, sector confirmation, portfolio exposure, and news sentiment before action.
+        </p>
+    </div>
+
+    <div class="card">
+        <h2>Risk Disclaimer</h2>
+        <p>HDI provides decision intelligence based on data patterns. It is not financial advice or a guarantee of profit.</p>
+    </div>
+    """
+
+def portfolio_scenario_html(api_key, test_symbol=None, test_amount=0):
+    holdings = get_portfolio(api_key)
+    base_count = len(holdings)
+
+    scenario_symbol = test_symbol or "NVDA"
+    try:
+        scenario_amount = float(test_amount)
+    except:
+        scenario_amount = 0
+
+    scenario_signal = generate_decision_signal(symbol=scenario_symbol, api_key=api_key)
+    scenario_score = scenario_signal["market_score"]
+
+    if scenario_score >= 80:
+        impact = "Potentially improves portfolio quality if exposure is controlled."
+    elif scenario_score >= 65:
+        impact = "Could add moderate opportunity but requires confirmation."
+    else:
+        impact = "May increase risk unless conditions improve."
+
+    return f"""
+    <div class="grid">
+        <div class="box">
+            <b>Current Holdings</b><br>
+            <span class="metric">{base_count}</span>
+        </div>
+
+        <div class="box">
+            <b>Scenario Asset</b><br>
+            {scenario_symbol}<br>
+            Amount Tested: {scenario_amount}
+        </div>
+
+        <div class="box">
+            <b>Scenario Score</b><br>
+            <span class="metric">{scenario_score}/100</span><br>
+            Priority: <span class="gold">{scenario_signal["priority"]}</span>
+        </div>
+
+        <div class="box">
+            <b>Scenario Impact</b><br>
+            <span class="muted">{impact}</span>
+        </div>
+    </div>
+    """
+
+def user_risk_profile_html(api_key):
+    current = get_user_risk_profile(api_key)
+    return f"""
+    <div class="box">
+        <b>Current Risk Profile</b><br>
+        <span class="metric">{current}</span><br>
+        <span class="muted">This helps HDI adapt recommendations to your decision style.</span>
+    </div>
+
+    <form action="/hdi/set-risk-profile" method="POST">
+        <input type="hidden" name="key" value="{api_key}">
+        <select name="risk_profile">
+            <option>Conservative</option>
+            <option>Balanced</option>
+            <option>Aggressive</option>
+        </select><br>
+        <button type="submit">Update Risk Profile</button>
+    </form>
+    """
+
+def api_access_layer_html(api_key):
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Live Stream API</b><br><span class="muted">/hdi/live-stream?key={api_key}</span></div>
+        <div class="box"><b>Predictions API</b><br><span class="muted">/hdi/predictions?key={api_key}</span></div>
+        <div class="box"><b>Risk API</b><br><span class="muted">/hdi/risk-intelligence?key={api_key}</span></div>
+        <div class="box"><b>Opportunity API</b><br><span class="muted">/hdi/opportunity-intelligence?key={api_key}</span></div>
+        <div class="box"><b>Portfolio API</b><br><span class="muted">/hdi/portfolio?key={api_key}</span></div>
+        <div class="box"><b>Report API</b><br><span class="muted">/hdi/report?key={api_key}</span></div>
+    </div>
+    """
 
 
 def strategy_recommendation_engine_html(api_key):
@@ -2063,6 +2355,12 @@ def dashboard():
     macro_forecast = ai_macro_forecast_engine_html()
     market_pulse = dynamic_market_pulse_html(key)
     adaptive_feed = adaptive_recommendation_feed_html(key)
+    report_preview = ai_report_html(key)
+    company_layer = company_intelligence_html(key)
+    scenario_simulator = portfolio_scenario_html(key)
+    notifications = notification_center_html(key)
+    risk_profile_ui = user_risk_profile_html(key)
+    api_access = api_access_layer_html(key)
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -2091,6 +2389,12 @@ def dashboard():
 <a href="#macro-forecast">Macro Forecast</a>
 <a href="#market-pulse">Market Pulse</a>
 <a href="#adaptive-feed">AI Feed</a>
+<a href="#report">Report</a>
+<a href="#company">Company</a>
+<a href="#scenario">Scenario</a>
+<a href="#notifications">Notifications</a>
+<a href="#risk-profile">Risk Profile</a>
+<a href="#api-access">API</a>
 <a href="#watchlist">Watchlist</a>
 <a href="#performance">Performance</a>
 <a href="/hdi/methodology">Methodology</a>
@@ -2218,6 +2522,69 @@ def dashboard():
 <h2>ð§  Personalized HDI Recommendations</h2>
 <p class="blue">HDI adapts recommendations based on your behavior, portfolio activity, and signal quality.</p>
 <div class="grid">{adaptive_feed}</div>
+</div>
+
+<div class="card" id="report">
+<div class="institution">AI Report Generator</div>
+<h2>ð HDI AI Intelligence Report</h2>
+<p class="blue">Generate a professional market, portfolio, risk, and opportunity report.</p>
+<a class="btn" href="/hdi/report?key={key}">Open Full Report</a>
+<a class="btn" href="/hdi/report-pdf?key={key}">PDF / Print View</a>
+{report_preview}
+</div>
+
+<div class="card" id="company">
+<div class="institution">Company Intelligence Layer</div>
+<h2>ð¢ Company Intelligence</h2>
+<p class="blue">HDI profiles each company by sector, score, pattern, business quality, risk, and opportunity.</p>
+<div class="grid">{company_layer}</div>
+</div>
+
+<div class="card" id="scenario">
+<div class="institution">Portfolio Scenario Simulator</div>
+<h2>ð§ª Portfolio Scenario Simulator</h2>
+<p class="blue">Test what happens if you add a new holding before committing it to your portfolio.</p>
+<form action="/hdi/scenario" method="GET">
+<input type="hidden" name="key" value="{key}">
+<select name="symbol"><option>AAPL</option><option>MSFT</option><option>TSLA</option><option>NVDA</option><option>AMZN</option><option>GOOGL</option><option>META</option></select><br>
+<input name="amount" placeholder="Scenario Amount"><br>
+<button type="submit">Run Scenario</button>
+</form>
+{scenario_simulator}
+</div>
+
+<div class="card" id="notifications">
+<div class="institution">Smart Notification Center</div>
+<h2>ð HDI Notification Center</h2>
+<p class="blue">All alerts, risk updates, portfolio messages, sector pulses, and news updates in one place.</p>
+<div class="grid">{notifications}</div>
+</div>
+
+<div class="card" id="risk-profile">
+<div class="institution">User Risk Profile Setup</div>
+<h2>ðï¸ Risk Profile</h2>
+<p class="blue">Choose how HDI should adapt strategy recommendations to your style.</p>
+{risk_profile_ui}
+</div>
+
+<div class="card">
+<div class="institution">Institutional Landing Page</div>
+<h2>ð HDI for Institutions</h2>
+<p class="blue">A decision intelligence platform for investors, banks, companies, and governments.</p>
+<a class="btn" href="/hdi/institutional">Open Institutional Page</a>
+</div>
+
+<div class="card" id="api-access">
+<div class="institution">API Access Layer</div>
+<h2>ð HDI API Access</h2>
+<p class="blue">Developer and enterprise-ready endpoints for integrations.</p>
+{api_access}
+</div>
+
+<div class="card">
+<div class="institution">Mobile-Ready UI Upgrade</div>
+<h2>ð± Mobile Optimized</h2>
+<p class="blue">HDI layout uses responsive cards, adaptive grids, and phone-friendly navigation for mobile usage.</p>
 </div>
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
@@ -2991,5 +3358,4 @@ def pay():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-
 
