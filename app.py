@@ -621,6 +621,104 @@ def portfolio_intelligence_html(api_key):
 
 
 
+
+def ai_briefing_engine_html(api_key):
+    try:
+        top_signal = generate_ranked_signals(api_key, limit=1)[0]
+    except:
+        top_signal = generate_decision_signal(api_key=api_key)
+
+    try:
+        sectors = generate_sector_intelligence()
+        top_sector = sectors[0] if sectors else None
+    except:
+        top_sector = None
+
+    try:
+        economies = generate_economy_intelligence()
+        top_economy = economies[0] if economies else None
+    except:
+        top_economy = None
+
+    try:
+        holdings = get_portfolio(api_key)
+        portfolio_status = "No active portfolio yet."
+        if holdings:
+            portfolio_status = f"{len(holdings)} holdings under HDI monitoring."
+    except:
+        portfolio_status = "Portfolio data unavailable."
+
+    signal_symbol = top_signal["symbol"]
+    signal_score = top_signal["market_score"]
+    signal_priority = top_signal["priority"]
+    signal_pattern = top_signal["pattern"]
+
+    sector_text = f"{top_sector['sector']} is currently the strongest sector with score {top_sector['sector_score']}/100." if top_sector else "Sector intelligence is still forming."
+    economy_text = f"{top_economy['economy']} is showing {top_economy['mood']} with score {top_economy['total_score']}/100." if top_economy else "Economy intelligence is still forming."
+
+    if signal_score >= 80:
+        opportunity_note = f"HDI detects elevated opportunity pressure around {signal_symbol}. Momentum and ranking suggest this asset deserves attention."
+    elif signal_score >= 65:
+        opportunity_note = f"HDI detects a developing setup around {signal_symbol}. Confirmation is still important before aggressive decisions."
+    else:
+        opportunity_note = f"HDI detects weak or uncertain conditions around {signal_symbol}. Patience is preferred."
+
+    if signal_priority in ["CRITICAL", "HIGH"]:
+        risk_note = "Risk should be controlled because high-priority signals can still reverse under volatility or news pressure."
+    else:
+        risk_note = "Risk is currently moderate, but HDI recommends waiting for stronger confirmation."
+
+    return f"""
+    <div class="grid">
+        <div class="box">
+            <b>What is happening now</b><br>
+            <span class="muted">
+            HDI is tracking {signal_symbol} as the leading signal. Pattern detected: {signal_pattern}. Market score is {signal_score}/100.
+            </span>
+        </div>
+
+        <div class="box">
+            <b>Why it matters</b><br>
+            <span class="muted">
+            {signal_symbol} is influencing the current intelligence ranking. This can guide watchlist focus, portfolio monitoring, and signal review.
+            </span>
+        </div>
+
+        <div class="box">
+            <b>What to watch next</b><br>
+            <span class="muted">
+            Watch momentum continuation, volatility behavior, sector strength, and news sentiment before making decisions.
+            </span>
+        </div>
+
+        <div class="box">
+            <b>Sector context</b><br>
+            <span class="muted">{sector_text}</span>
+        </div>
+
+        <div class="box">
+            <b>Economy context</b><br>
+            <span class="muted">{economy_text}</span>
+        </div>
+
+        <div class="box">
+            <b>Portfolio context</b><br>
+            <span class="muted">{portfolio_status}</span>
+        </div>
+
+        <div class="box">
+            <b>Opportunity note</b><br>
+            <span class="gold">{opportunity_note}</span>
+        </div>
+
+        <div class="box">
+            <b>Risk note</b><br>
+            <span class="muted">{risk_note}</span>
+        </div>
+    </div>
+    """
+
+
 def ai_prediction_engine_html(api_key):
     predictions = []
 
@@ -1429,6 +1527,7 @@ def dashboard():
     heatmap = institutional_heatmap_html(key)
     behavioral = behavioral_intelligence_html(key)
     predictions = ai_prediction_engine_html(key)
+    ai_briefing = ai_briefing_engine_html(key)
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -1449,6 +1548,7 @@ def dashboard():
 <a href="#news">News</a>
 <a href="#signals">Signals</a>
 <a href="#predictions">Predictions</a>
+<a href="#briefing">AI Briefing</a>
 <a href="#watchlist">Watchlist</a>
 <a href="#performance">Performance</a>
 <a href="/hdi/methodology">Methodology</a>
@@ -1520,6 +1620,13 @@ def dashboard():
 <h2>ð® HDI Prediction Intelligence</h2>
 <p class="blue">HDI estimates bullish/bearish pressure, probability, and momentum acceleration.</p>
 <div class="grid">{predictions}</div>
+</div>
+
+<div class="card" id="briefing">
+<div class="institution">AI Briefing Engine</div>
+<h2>ð§  HDI Analyst Briefing</h2>
+<p class="blue">A structured analyst-style briefing: what is happening, why it matters, what to watch, risk, and opportunity.</p>
+{ai_briefing}
 </div>
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
@@ -1925,6 +2032,43 @@ def ranked_signals_api():
 
 
 
+
+@app.route("/hdi/ai-briefing")
+def ai_briefing_api():
+    key = request.args.get("key")
+    if not key:
+        return jsonify({"error": "key required"}), 400
+
+    try:
+        top_signal = generate_ranked_signals(key, limit=1)[0]
+    except:
+        top_signal = generate_decision_signal(api_key=key)
+
+    try:
+        sectors = generate_sector_intelligence()
+        top_sector = sectors[0] if sectors else None
+    except:
+        top_sector = None
+
+    try:
+        economies = generate_economy_intelligence()
+        top_economy = economies[0] if economies else None
+    except:
+        top_economy = None
+
+    return jsonify({
+        "status": "active",
+        "updated_at": datetime.utcnow().isoformat(),
+        "what_is_happening_now": f"HDI is tracking {top_signal['symbol']} as the leading signal with score {top_signal['market_score']}/100.",
+        "why_it_matters": f"{top_signal['symbol']} is influencing the current intelligence ranking and may affect watchlist or portfolio focus.",
+        "what_to_watch_next": "Watch momentum continuation, volatility behavior, sector strength, and news sentiment.",
+        "risk_note": "HDI provides decision intelligence, not financial advice. Verify before making decisions.",
+        "opportunity_note": top_signal["recommendation"],
+        "top_signal": top_signal,
+        "top_sector": top_sector,
+        "top_economy": top_economy
+    })
+
 @app.route("/hdi/predictions")
 def predictions_api():
     key = request.args.get("key")
@@ -2028,3 +2172,4 @@ def pay():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
