@@ -620,6 +620,75 @@ def portfolio_intelligence_html(api_key):
 
 
 
+
+def ai_prediction_engine_html(api_key):
+    predictions = []
+
+    try:
+        ranked = generate_ranked_signals(api_key, limit=5)
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+
+    for s in ranked:
+        score = s["market_score"]
+        change = s["change"]
+        volatility = s["volatility"]
+        momentum = s["confidence_breakdown"]["momentum"]
+        trend = s["confidence_breakdown"]["trend_strength"]
+
+        bullish_pressure = min(100, max(0, int((score * 0.45) + (momentum * 0.30) + (trend * 0.25))))
+        bearish_pressure = min(100, max(0, int((100 - score) * 0.60 + volatility * 8)))
+
+        if bullish_pressure >= 82 and change >= 0:
+            label = "Growth Pressure"
+            direction = "Bullish"
+            action = "Breakout Watch"
+        elif bullish_pressure >= 68:
+            label = "Accumulation Zone"
+            direction = "Bullish / Neutral"
+            action = "Monitor Momentum"
+        elif bearish_pressure >= 55:
+            label = "Caution Zone"
+            direction = "Bearish / Risk"
+            action = "Reduce Aggression"
+        else:
+            label = "Neutral Formation"
+            direction = "Neutral"
+            action = "Wait for Confirmation"
+
+        probability = min(95, max(45, int((bullish_pressure * 0.65) + ((100 - bearish_pressure) * 0.35))))
+        acceleration = "Rising" if momentum >= trend else "Stabilizing"
+
+        predictions.append({
+            "symbol": s["symbol"],
+            "label": label,
+            "direction": direction,
+            "action": action,
+            "probability": probability,
+            "bullish_pressure": bullish_pressure,
+            "bearish_pressure": bearish_pressure,
+            "acceleration": acceleration,
+            "score": score
+        })
+
+    html = ""
+    for p in predictions:
+        html += f"""
+        <div class="box">
+            <b>{p["symbol"]}</b><br>
+            Prediction: <span class="gold">{p["label"]}</span><br>
+            Direction: {p["direction"]}<br>
+            Probability: <span class="metric">{p["probability"]}%</span><br>
+            Bullish Pressure: {p["bullish_pressure"]}/100<br>
+            Bearish Pressure: {p["bearish_pressure"]}/100<br>
+            Momentum Acceleration: {p["acceleration"]}<br>
+            HDI Action: <span class="blue">{p["action"]}</span>
+        </div>
+        """
+
+    return html
+
+
 def admin_intelligence_console_html():
     try:
         conn = get_conn()
@@ -1359,6 +1428,7 @@ def dashboard():
     smart_alerts = smart_alerts_html(key)
     heatmap = institutional_heatmap_html(key)
     behavioral = behavioral_intelligence_html(key)
+    predictions = ai_prediction_engine_html(key)
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -1378,6 +1448,7 @@ def dashboard():
 <a href="#sectors">Sectors</a>
 <a href="#news">News</a>
 <a href="#signals">Signals</a>
+<a href="#predictions">Predictions</a>
 <a href="#watchlist">Watchlist</a>
 <a href="#performance">Performance</a>
 <a href="/hdi/methodology">Methodology</a>
@@ -1443,6 +1514,13 @@ def dashboard():
 <div class="card" id="sectors"><div class="institution">Sector Intelligence Layer</div><h2>ð Global Sector Intelligence</h2><div class="grid">{sectors}</div></div>
 <div class="card" id="news"><div class="institution">News Intelligence Layer</div><h2>ð° Market News Intelligence</h2><div class="grid">{news}</div></div>
 <div class="card" id="signals"><div class="institution">Live Signal Ranking</div><h2>ð¥ Top Ranked Signals</h2><div class="grid">{ranked_signals}</div></div>
+
+<div class="card" id="predictions">
+<div class="institution">AI Prediction Engine V2</div>
+<h2>ð® HDI Prediction Intelligence</h2>
+<p class="blue">HDI estimates bullish/bearish pressure, probability, and momentum acceleration.</p>
+<div class="grid">{predictions}</div>
+</div>
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
 <h2>ð§  Multi-Factor Signal Engine</h2>
@@ -1846,6 +1924,54 @@ def ranked_signals_api():
     return jsonify(generate_ranked_signals(key))
 
 
+
+@app.route("/hdi/predictions")
+def predictions_api():
+    key = request.args.get("key")
+    if not key:
+        return jsonify({"error": "key required"}), 400
+
+    data = []
+    try:
+        ranked = generate_ranked_signals(key, limit=5)
+    except:
+        ranked = [generate_decision_signal(api_key=key)]
+
+    for s in ranked:
+        score = s["market_score"]
+        volatility = s["volatility"]
+        momentum = s["confidence_breakdown"]["momentum"]
+        trend = s["confidence_breakdown"]["trend_strength"]
+
+        bullish_pressure = min(100, max(0, int((score * 0.45) + (momentum * 0.30) + (trend * 0.25))))
+        bearish_pressure = min(100, max(0, int((100 - score) * 0.60 + volatility * 8)))
+        probability = min(95, max(45, int((bullish_pressure * 0.65) + ((100 - bearish_pressure) * 0.35))))
+
+        if bullish_pressure >= 82:
+            label = "Growth Pressure"
+        elif bullish_pressure >= 68:
+            label = "Accumulation Zone"
+        elif bearish_pressure >= 55:
+            label = "Caution Zone"
+        else:
+            label = "Neutral Formation"
+
+        data.append({
+            "symbol": s["symbol"],
+            "prediction": label,
+            "probability": probability,
+            "bullish_pressure": bullish_pressure,
+            "bearish_pressure": bearish_pressure,
+            "momentum_acceleration": "Rising" if momentum >= trend else "Stabilizing",
+            "market_score": score
+        })
+
+    return jsonify({
+        "status": "active",
+        "updated_at": datetime.utcnow().isoformat(),
+        "predictions": data
+    })
+
 @app.route("/hdi/admin-console")
 def admin_console():
     if ADMIN_KEY and request.args.get("key") != ADMIN_KEY:
@@ -1902,4 +2028,3 @@ def pay():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-
