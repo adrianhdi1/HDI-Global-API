@@ -615,6 +615,180 @@ def portfolio_intelligence_html(api_key):
     return summary + "<div class='grid'>" + rows + "</div>"
 
 
+
+
+def smart_alerts_html(api_key):
+    alerts = []
+
+    try:
+        top_signal = generate_ranked_signals(api_key, limit=1)[0]
+        if top_signal["priority"] in ["HIGH", "CRITICAL"]:
+            alerts.append({
+                "level": top_signal["priority"],
+                "title": f"{top_signal['symbol']} high-priority signal",
+                "body": f"{top_signal['pattern']} detected with market score {top_signal['market_score']}/100."
+            })
+    except:
+        pass
+
+    try:
+        holdings = get_portfolio(api_key)
+        if holdings:
+            total_amount = sum([float(h[2]) for h in holdings])
+            risk_total = 0
+            weakest = None
+
+            for holding_id, symbol, amount in holdings:
+                signal = generate_decision_signal(symbol, api_key)
+                weight = (float(amount) / total_amount) if total_amount else 0
+                risk_total += (100 - signal["market_score"]) * weight
+
+                if weakest is None or signal["market_score"] < weakest["score"]:
+                    weakest = {"symbol": symbol, "score": signal["market_score"]}
+
+            portfolio_risk = round(risk_total, 1)
+
+            if portfolio_risk >= 45:
+                alerts.append({
+                    "level": "RISK",
+                    "title": "Portfolio risk rising",
+                    "body": f"HDI detected portfolio risk at {portfolio_risk}/100. Weakest holding: {weakest['symbol']}."
+                })
+            elif portfolio_risk >= 25:
+                alerts.append({
+                    "level": "WATCH",
+                    "title": "Portfolio requires monitoring",
+                    "body": f"Portfolio risk is moderate at {portfolio_risk}/100. Review weaker positions."
+                })
+    except:
+        pass
+
+    try:
+        sectors = generate_sector_intelligence()
+        if sectors:
+            top_sector = sectors[0]
+            if top_sector["priority"] in ["HIGH", "MEDIUM"]:
+                alerts.append({
+                    "level": top_sector["priority"],
+                    "title": f"{top_sector['sector']} sector alert",
+                    "body": f"{top_sector['opportunity']} Sector score: {top_sector['sector_score']}/100."
+                })
+    except:
+        pass
+
+    try:
+        economies = generate_economy_intelligence()
+        if economies:
+            risk_economies = [e for e in economies if e["mood"] == "RISK ZONE"]
+            if risk_economies:
+                e = risk_economies[0]
+                alerts.append({
+                    "level": "MACRO RISK",
+                    "title": f"{e['economy']} macro risk",
+                    "body": f"HDI detected {e['mood']} with economy score {e['total_score']}/100."
+                })
+    except:
+        pass
+
+    try:
+        news = fetch_news_sentiment()
+        if news:
+            sentiment = news[0].get("overall_sentiment_label", "Neutral")
+            if sentiment in ["Bullish", "Somewhat-Bullish", "Bearish", "Somewhat-Bearish"]:
+                alerts.append({
+                    "level": sentiment,
+                    "title": "News sentiment alert",
+                    "body": news[0].get("title", "Market sentiment shift detected")[:150]
+                })
+    except:
+        pass
+
+    if not alerts:
+        alerts.append({
+            "level": "STABLE",
+            "title": "No major alerts detected",
+            "body": "HDI is monitoring markets, portfolio exposure, sectors, economy mood, and news sentiment."
+        })
+
+    html = ""
+    for alert in alerts[:6]:
+        html += f"""
+        <div class="alert-box">
+            <b>{alert["title"]}</b><br>
+            <span class="muted">{alert["body"]}</span><br>
+            <span class="gold">{alert["level"]}</span>
+        </div>
+        """
+
+    return html
+
+
+def live_intelligence_stream_html(api_key):
+    try:
+        ranked = generate_ranked_signals(api_key, limit=3)
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+
+    items = []
+    for s in ranked:
+        items.append({
+            "title": f"{s['symbol']} momentum update",
+            "body": f"{s['pattern']} detected. Score {s['market_score']}/100 with {s['priority']} priority.",
+            "tag": s["priority"]
+        })
+
+    try:
+        sectors = generate_sector_intelligence()
+        if sectors:
+            top_sector = sectors[0]
+            items.append({
+                "title": f"{top_sector['sector']} sector pulse",
+                "body": f"Sector score {top_sector['sector_score']}/100. {top_sector['opportunity']}.",
+                "tag": top_sector["priority"]
+            })
+    except:
+        pass
+
+    try:
+        economies = generate_economy_intelligence()
+        if economies:
+            top_economy = economies[0]
+            items.append({
+                "title": f"{top_economy['economy']} macro pulse",
+                "body": f"Mood: {top_economy['mood']}. Economy score {top_economy['total_score']}/100.",
+                "tag": top_economy["priority"]
+            })
+    except:
+        pass
+
+    try:
+        news = fetch_news_sentiment()
+        if news:
+            headline = news[0]
+            items.append({
+                "title": "News sentiment shift",
+                "body": f"{headline.get('title','Market headline detected')[:120]}",
+                "tag": headline.get("overall_sentiment_label", "Neutral")
+            })
+    except:
+        pass
+
+    html = ""
+    for item in items[:6]:
+        html += f"""
+        <div class="stream-item">
+            <div class="stream-dot"></div>
+            <div>
+                <b>{item["title"]}</b><br>
+                <span class="muted">{item["body"]}</span><br>
+                <span class="gold">{item["tag"]}</span>
+            </div>
+        </div>
+        """
+
+    return html
+
+
 def executive_brief_html(api_key):
     try:
         top_signal = generate_ranked_signals(api_key, limit=1)[0]
@@ -722,6 +896,13 @@ def base_style():
     .metric{font-size:30px;font-weight:bold;color:#38bdf8;} .locked{filter:blur(3px);opacity:.55;}
     .nav{position:sticky;top:0;z-index:99;background:#020617;border:1px solid rgba(56,189,248,.18);border-radius:16px;padding:14px;margin-bottom:22px;}
     .nav a{color:#38bdf8;text-decoration:none;font-weight:bold;margin:8px;display:inline-block;}
+    .stream{max-height:420px;overflow:hidden;}
+    .stream-item{display:flex;gap:14px;align-items:flex-start;background:rgba(15,23,42,.55);border:1px solid rgba(56,189,248,.08);padding:14px;margin:10px;border-radius:16px;text-align:left;animation:pulseIn .8s ease;}
+    .stream-dot{width:10px;height:10px;background:#38bdf8;border-radius:50%;margin-top:6px;box-shadow:0 0 18px #38bdf8;flex:0 0 auto;}
+    .live-badge{display:inline-block;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.35);color:#22c55e;padding:6px 12px;border-radius:999px;font-weight:bold;margin:8px;}
+    @keyframes pulseIn{from{opacity:.3;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .alert-box{background:rgba(127,29,29,.22);border:1px solid rgba(248,113,113,.22);padding:16px;margin:10px;border-radius:18px;text-align:left;box-shadow:0 0 22px rgba(127,29,29,.12);}
+    .alert-box b{color:#fecaca;}
     </style>
     """
 
@@ -833,6 +1014,8 @@ def dashboard():
     economies = economy_intelligence_html()
     portfolio = portfolio_intelligence_html(key)
     brief = executive_brief_html(key)
+    live_stream = live_intelligence_stream_html(key)
+    smart_alerts = smart_alerts_html(key)
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -843,6 +1026,8 @@ def dashboard():
 <div class="nav">
 <a href="/hdi/profile?key={key}">Profile</a>
 <a href="#brief">Brief</a>
+<a href="#live">Live Stream</a>
+<a href="#alerts">Alerts</a>
 <a href="#portfolio">Portfolio</a>
 <a href="#economy">Economy</a>
 <a href="#sectors">Sectors</a>
@@ -869,6 +1054,20 @@ def dashboard():
 {access_button}
 </div>
 {brief}
+<div class="card" id="live">
+<div class="institution">Real-Time Intelligence Stream</div>
+<h2>ð¡ Live HDI Intelligence Feed</h2>
+<span class="live-badge">LIVE MODE</span>
+<p class="blue">HDI streams market pulse, signal movement, sector pressure, economy mood, and news sentiment.</p>
+<div class="stream">{live_stream}</div>
+</div>
+<div class="card" id="alerts">
+<div class="institution">Smart Alerts System</div>
+<h2>ð¨ HDI Smart Alerts</h2>
+<p class="blue">HDI alerts you when signals, portfolio risk, sectors, macro conditions, or news sentiment require attention.</p>
+<div class="grid">{smart_alerts}</div>
+</div>
+
 <div class="card" id="portfolio">
 <div class="institution">Portfolio Intelligence Layer</div>
 <h2>ð¼ Personal Portfolio Intelligence</h2>
@@ -1000,6 +1199,116 @@ def portfolio_api():
         return jsonify({"error":"key required"}), 400
     holdings = get_portfolio(key)
     return jsonify([{"id": h[0], "symbol": h[1], "amount": h[2]} for h in holdings])
+
+
+
+@app.route("/hdi/alerts")
+def alerts_api():
+    key = request.args.get("key")
+    if not key:
+        return jsonify({"error": "key required"}), 400
+
+    alerts = []
+
+    try:
+        top_signal = generate_ranked_signals(key, limit=1)[0]
+        if top_signal["priority"] in ["HIGH", "CRITICAL"]:
+            alerts.append({
+                "type": "signal",
+                "level": top_signal["priority"],
+                "symbol": top_signal["symbol"],
+                "score": top_signal["market_score"],
+                "message": top_signal["recommendation"]
+            })
+    except:
+        pass
+
+    try:
+        sectors = generate_sector_intelligence()
+        if sectors:
+            top = sectors[0]
+            alerts.append({
+                "type": "sector",
+                "level": top["priority"],
+                "sector": top["sector"],
+                "score": top["sector_score"],
+                "message": top["opportunity"]
+            })
+    except:
+        pass
+
+    try:
+        economies = generate_economy_intelligence()
+        if economies:
+            top = economies[0]
+            alerts.append({
+                "type": "economy",
+                "level": top["priority"],
+                "economy": top["economy"],
+                "score": top["total_score"],
+                "message": top["mood"]
+            })
+    except:
+        pass
+
+    return jsonify({
+        "status": "active",
+        "updated_at": datetime.utcnow().isoformat(),
+        "alerts": alerts
+    })
+
+@app.route("/hdi/live-stream")
+def live_stream_api():
+    key = request.args.get("key")
+    if not key:
+        return jsonify({"error": "key required"}), 400
+
+    data = []
+    try:
+        for s in generate_ranked_signals(key, limit=3):
+            data.append({
+                "type": "signal",
+                "title": f"{s['symbol']} momentum update",
+                "score": s["market_score"],
+                "priority": s["priority"],
+                "message": s["recommendation"]
+            })
+    except:
+        pass
+
+    try:
+        sectors = generate_sector_intelligence()
+        if sectors:
+            top = sectors[0]
+            data.append({
+                "type": "sector",
+                "title": top["sector"],
+                "score": top["sector_score"],
+                "priority": top["priority"],
+                "message": top["opportunity"]
+            })
+    except:
+        pass
+
+    try:
+        economies = generate_economy_intelligence()
+        if economies:
+            top = economies[0]
+            data.append({
+                "type": "economy",
+                "title": top["economy"],
+                "score": top["total_score"],
+                "priority": top["priority"],
+                "message": top["mood"]
+            })
+    except:
+        pass
+
+    return jsonify({
+        "status": "live",
+        "updated_at": datetime.utcnow().isoformat(),
+        "stream": data
+    })
 
 @app.route("/hdi/news")
 def news_api():
