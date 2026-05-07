@@ -624,6 +624,298 @@ def portfolio_intelligence_html(api_key):
 
 
 
+
+def strategy_recommendation_engine_html(api_key):
+    try:
+        top_signal = generate_ranked_signals(api_key, limit=1)[0]
+    except:
+        top_signal = generate_decision_signal(api_key=api_key)
+
+    score = top_signal["market_score"]
+    volatility = top_signal["volatility"]
+    momentum = top_signal["confidence_breakdown"]["momentum"]
+    trend = top_signal["confidence_breakdown"]["trend_strength"]
+
+    try:
+        holdings = get_portfolio(api_key)
+        has_portfolio = len(holdings) > 0
+    except:
+        holdings = []
+        has_portfolio = False
+
+    try:
+        sectors = generate_sector_intelligence()
+        top_sector = sectors[0] if sectors else None
+    except:
+        top_sector = None
+
+    try:
+        economies = generate_economy_intelligence()
+        top_economy = economies[0] if economies else None
+    except:
+        top_economy = None
+
+    risk_pressure = min(100, int((100 - score) * 0.60 + volatility * 8))
+    opportunity_pressure = min(100, int(score * 0.45 + momentum * 0.30 + trend * 0.25))
+
+    if opportunity_pressure >= 82 and risk_pressure < 45:
+        strategy = "Aggressive Growth"
+        strategy_note = "HDI detects strong opportunity pressure with controlled risk. Consider focused monitoring for high-quality entries."
+    elif opportunity_pressure >= 68 and risk_pressure < 60:
+        strategy = "Balanced Monitoring"
+        strategy_note = "HDI detects a developing opportunity. Monitor confirmation before increasing exposure."
+    elif risk_pressure >= 65:
+        strategy = "Defensive Mode"
+        strategy_note = "Risk pressure is elevated. Reduce aggression and protect capital."
+    elif has_portfolio and risk_pressure >= 50:
+        strategy = "Reduce Exposure"
+        strategy_note = "Portfolio or market risk requires review. Reduce weak positions first."
+    else:
+        strategy = "Wait for Confirmation"
+        strategy_note = "Conditions are not strong enough for aggressive action. Wait for clearer momentum and sector support."
+
+    sector_context = f"{top_sector['sector']} leads sector strength at {top_sector['sector_score']}/100." if top_sector else "Sector data forming."
+    economy_context = f"{top_economy['economy']} shows {top_economy['mood']}." if top_economy else "Economy data forming."
+
+    return f"""
+    <div class="grid">
+        <div class="box">
+            <b>Recommended Strategy</b><br>
+            <span class="metric">{strategy}</span><br>
+            <span class="gold">{strategy_note}</span>
+        </div>
+
+        <div class="box">
+            <b>Top Asset Context</b><br>
+            {top_signal["symbol"]}<br>
+            Market Score: {score}/100<br>
+            Priority: <span class="gold">{top_signal["priority"]}</span>
+        </div>
+
+        <div class="box">
+            <b>Opportunity Pressure</b><br>
+            <span class="metric">{opportunity_pressure}/100</span><br>
+            <span class="muted">Momentum + trend + signal quality</span>
+        </div>
+
+        <div class="box">
+            <b>Risk Pressure</b><br>
+            <span class="metric">{risk_pressure}/100</span><br>
+            <span class="muted">Volatility + weak-score pressure</span>
+        </div>
+
+        <div class="box">
+            <b>Sector Context</b><br>
+            <span class="muted">{sector_context}</span>
+        </div>
+
+        <div class="box">
+            <b>Economy Context</b><br>
+            <span class="muted">{economy_context}</span>
+        </div>
+    </div>
+    """
+
+def institutional_scoring_engine_html(api_key):
+    try:
+        ranked = generate_ranked_signals(api_key, limit=5)
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+
+    html = ""
+    for s in ranked:
+        momentum = s["confidence_breakdown"]["momentum"]
+        volatility_quality = max(0, 100 - int(s["volatility"] * 8))
+        trend = s["confidence_breakdown"]["trend_strength"]
+        relevance = s["confidence_breakdown"]["user_relevance"]
+
+        institutional_confidence = min(100, int(
+            s["market_score"] * 0.35 +
+            momentum * 0.25 +
+            trend * 0.20 +
+            volatility_quality * 0.10 +
+            relevance * 0.10
+        ))
+
+        if institutional_confidence >= 82:
+            grade = "Institutional Grade A"
+        elif institutional_confidence >= 70:
+            grade = "Institutional Grade B"
+        elif institutional_confidence >= 58:
+            grade = "Watchlist Grade"
+        else:
+            grade = "Low Quality Signal"
+
+        html += f"""
+        <div class="box">
+            <b>{s["symbol"]}</b><br>
+            Institutional Confidence: <span class="metric">{institutional_confidence}/100</span><br>
+            Grade: <span class="gold">{grade}</span><br>
+            Signal Quality: {s["market_score"]}/100<br>
+            Momentum Quality: {momentum}/100<br>
+            Trend Quality: {trend}/100<br>
+            Volatility Quality: {volatility_quality}/100
+        </div>
+        """
+
+    return html
+
+def ai_macro_forecast_engine_html():
+    try:
+        economies = generate_economy_intelligence()
+    except:
+        economies = []
+
+    html = ""
+    for e in economies[:5]:
+        stability_index = max(0, min(100, int(
+            (100 - e["risk_score"]) * 0.35 +
+            (100 - e["inflation_pressure"]) * 0.35 +
+            e["opportunity_score"] * 0.30
+        )))
+
+        if stability_index >= 75:
+            forecast = "Expansion Watch"
+            note = "Macro conditions show improving opportunity and controlled risk pressure."
+        elif stability_index >= 60:
+            forecast = "Mixed Stability"
+            note = "Macro environment is usable but requires careful monitoring."
+        else:
+            forecast = "Pressure Zone"
+            note = "Macro risk or inflation pressure may weaken opportunity quality."
+
+        html += f"""
+        <div class="box">
+            <b>{e["economy"]}</b><br>
+            Macro Stability Index: <span class="metric">{stability_index}/100</span><br>
+            Forecast: <span class="gold">{forecast}</span><br>
+            Inflation Pressure: {e["inflation_pressure"]}/100<br>
+            Risk Score: {e["risk_score"]}/100<br>
+            Opportunity Score: {e["opportunity_score"]}/100<br>
+            <span class="muted">{note}</span>
+        </div>
+        """
+
+    return html
+
+def dynamic_market_pulse_html(api_key):
+    try:
+        ranked = generate_ranked_signals(api_key, limit=len(SYMBOLS))
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+
+    bullish = 0
+    bearish = 0
+    total_score = 0
+    volatility_total = 0
+
+    for s in ranked:
+        total_score += s["market_score"]
+        volatility_total += s["volatility"]
+        if s["market_score"] >= 65 and s["change"] >= 0:
+            bullish += 1
+        else:
+            bearish += 1
+
+    count = len(ranked) if ranked else 1
+    avg_score = round(total_score / count, 1)
+    avg_volatility = round(volatility_total / count, 2)
+
+    if bullish > bearish and avg_score >= 70:
+        mood = "Bullish Dominance"
+        pulse_note = "Market pulse shows broad strength and improving opportunity pressure."
+    elif bearish > bullish:
+        mood = "Bearish / Caution Dominance"
+        pulse_note = "Market pulse shows risk pressure or weak confirmation."
+    else:
+        mood = "Mixed Market"
+        pulse_note = "Market pulse is mixed. Wait for stronger confirmation."
+
+    return f"""
+    <div class="grid">
+        <div class="box">
+            <b>Market Mood</b><br>
+            <span class="metric">{mood}</span><br>
+            <span class="muted">{pulse_note}</span>
+        </div>
+
+        <div class="box">
+            <b>Average Market Score</b><br>
+            <span class="metric">{avg_score}/100</span>
+        </div>
+
+        <div class="box">
+            <b>Bullish Count</b><br>
+            <span class="metric">{bullish}</span>
+        </div>
+
+        <div class="box">
+            <b>Bearish / Caution Count</b><br>
+            <span class="metric">{bearish}</span>
+        </div>
+
+        <div class="box">
+            <b>Volatility Pulse</b><br>
+            <span class="metric">{avg_volatility}%</span><br>
+            <span class="muted">Average volatility across tracked assets</span>
+        </div>
+    </div>
+    """
+
+def adaptive_recommendation_feed_html(api_key):
+    try:
+        preferred = get_preferred_symbol(api_key)
+    except:
+        preferred = None
+
+    try:
+        ranked = generate_ranked_signals(api_key, limit=5)
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+
+    recommendations = []
+
+    if preferred:
+        recommendations.append({
+            "title": f"Focus detected: {preferred}",
+            "body": f"HDI has detected repeated activity around {preferred}. Keep this asset under priority monitoring."
+        })
+
+    for s in ranked[:3]:
+        if s["market_score"] >= 75:
+            body = f"{s['symbol']} has strong score {s['market_score']}/100. Monitor for confirmation and risk control."
+        elif s["market_score"] >= 62:
+            body = f"{s['symbol']} is forming a setup. Wait for stronger confirmation before acting aggressively."
+        else:
+            body = f"{s['symbol']} remains weak. Avoid rushing until conditions improve."
+
+        recommendations.append({
+            "title": f"{s['symbol']} adaptive recommendation",
+            "body": body
+        })
+
+    try:
+        holdings = get_portfolio(api_key)
+        if not holdings:
+            recommendations.append({
+                "title": "Portfolio not active",
+                "body": "Add holdings to unlock deeper portfolio risk, exposure, and strategy intelligence."
+            })
+    except:
+        pass
+
+    html = ""
+    for r in recommendations[:6]:
+        html += f"""
+        <div class="box">
+            <b>{r["title"]}</b><br>
+            <span class="muted">{r["body"]}</span>
+        </div>
+        """
+
+    return html
+
+
 def opportunity_intelligence_engine_html(api_key):
     opportunities = []
 
@@ -1766,6 +2058,11 @@ def dashboard():
     ai_briefing = ai_briefing_engine_html(key)
     risk_intelligence = risk_intelligence_engine_html(key)
     opportunity_intelligence = opportunity_intelligence_engine_html(key)
+    strategy_recommendation = strategy_recommendation_engine_html(key)
+    institutional_scores = institutional_scoring_engine_html(key)
+    macro_forecast = ai_macro_forecast_engine_html()
+    market_pulse = dynamic_market_pulse_html(key)
+    adaptive_feed = adaptive_recommendation_feed_html(key)
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -1789,6 +2086,11 @@ def dashboard():
 <a href="#briefing">AI Briefing</a>
 <a href="#risk">Risk</a>
 <a href="#opportunity">Opportunity</a>
+<a href="#strategy">Strategy</a>
+<a href="#institutional-score">Scores</a>
+<a href="#macro-forecast">Macro Forecast</a>
+<a href="#market-pulse">Market Pulse</a>
+<a href="#adaptive-feed">AI Feed</a>
 <a href="#watchlist">Watchlist</a>
 <a href="#performance">Performance</a>
 <a href="/hdi/methodology">Methodology</a>
@@ -1881,6 +2183,41 @@ def dashboard():
 <h2>ð HDI Opportunity Intelligence</h2>
 <p class="blue">HDI identifies asset opportunities, sector strength, economy opportunity zones, and confirmation needed.</p>
 {opportunity_intelligence}
+</div>
+
+<div class="card" id="strategy">
+<div class="institution">Strategy Recommendation Engine</div>
+<h2>âï¸ HDI Strategy Recommendation</h2>
+<p class="blue">HDI combines risk, opportunity, prediction, portfolio, sector, and macro context into a strategy mode.</p>
+{strategy_recommendation}
+</div>
+
+<div class="card" id="institutional-score">
+<div class="institution">Institutional Scoring Engine</div>
+<h2>ðï¸ HDI Institutional Signal Scores</h2>
+<p class="blue">HDI grades assets by institutional confidence, signal quality, momentum, trend, and volatility quality.</p>
+<div class="grid">{institutional_scores}</div>
+</div>
+
+<div class="card" id="macro-forecast">
+<div class="institution">AI Macro Forecast Engine</div>
+<h2>ð HDI Macro Forecast</h2>
+<p class="blue">HDI estimates macro stability, inflation pressure, economy risk, and opportunity quality.</p>
+<div class="grid">{macro_forecast}</div>
+</div>
+
+<div class="card" id="market-pulse">
+<div class="institution">Dynamic Market Pulse</div>
+<h2>ð HDI Live Market Pulse</h2>
+<p class="blue">HDI summarizes bullish/bearish dominance, average score, and volatility pulse.</p>
+{market_pulse}
+</div>
+
+<div class="card" id="adaptive-feed">
+<div class="institution">Adaptive Recommendation Feed</div>
+<h2>ð§  Personalized HDI Recommendations</h2>
+<p class="blue">HDI adapts recommendations based on your behavior, portfolio activity, and signal quality.</p>
+<div class="grid">{adaptive_feed}</div>
 </div>
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
@@ -2289,6 +2626,132 @@ def ranked_signals_api():
 
 
 
+
+@app.route("/hdi/strategy-recommendation")
+def strategy_recommendation_api():
+    key = request.args.get("key")
+    if not key:
+        return jsonify({"error": "key required"}), 400
+
+    top_signal = generate_ranked_signals(key, limit=1)[0]
+    score = top_signal["market_score"]
+    volatility = top_signal["volatility"]
+    momentum = top_signal["confidence_breakdown"]["momentum"]
+    trend = top_signal["confidence_breakdown"]["trend_strength"]
+
+    risk_pressure = min(100, int((100 - score) * 0.60 + volatility * 8))
+    opportunity_pressure = min(100, int(score * 0.45 + momentum * 0.30 + trend * 0.25))
+
+    if opportunity_pressure >= 82 and risk_pressure < 45:
+        strategy = "Aggressive Growth"
+    elif opportunity_pressure >= 68 and risk_pressure < 60:
+        strategy = "Balanced Monitoring"
+    elif risk_pressure >= 65:
+        strategy = "Defensive Mode"
+    elif risk_pressure >= 50:
+        strategy = "Reduce Exposure"
+    else:
+        strategy = "Wait for Confirmation"
+
+    return jsonify({
+        "status": "active",
+        "updated_at": datetime.utcnow().isoformat(),
+        "strategy": strategy,
+        "top_signal": top_signal,
+        "risk_pressure": risk_pressure,
+        "opportunity_pressure": opportunity_pressure
+    })
+
+@app.route("/hdi/institutional-scores")
+def institutional_scores_api():
+    key = request.args.get("key")
+    if not key:
+        return jsonify({"error": "key required"}), 400
+
+    scores = []
+    for s in generate_ranked_signals(key, limit=5):
+        momentum = s["confidence_breakdown"]["momentum"]
+        volatility_quality = max(0, 100 - int(s["volatility"] * 8))
+        trend = s["confidence_breakdown"]["trend_strength"]
+        relevance = s["confidence_breakdown"]["user_relevance"]
+
+        institutional_confidence = min(100, int(
+            s["market_score"] * 0.35 +
+            momentum * 0.25 +
+            trend * 0.20 +
+            volatility_quality * 0.10 +
+            relevance * 0.10
+        ))
+
+        scores.append({
+            "symbol": s["symbol"],
+            "institutional_confidence": institutional_confidence,
+            "market_score": s["market_score"],
+            "momentum_quality": momentum,
+            "trend_quality": trend,
+            "volatility_quality": volatility_quality,
+            "priority": s["priority"]
+        })
+
+    return jsonify({"status": "active", "updated_at": datetime.utcnow().isoformat(), "scores": scores})
+
+@app.route("/hdi/macro-forecast")
+def macro_forecast_api():
+    return jsonify({
+        "status": "active",
+        "updated_at": datetime.utcnow().isoformat(),
+        "economies": generate_economy_intelligence(),
+        "note": "AI macro forecast uses HDI economy intelligence model."
+    })
+
+@app.route("/hdi/market-pulse")
+def market_pulse_api():
+    key = request.args.get("key")
+    if not key:
+        return jsonify({"error": "key required"}), 400
+
+    ranked = generate_ranked_signals(key, limit=len(SYMBOLS))
+    bullish = len([s for s in ranked if s["market_score"] >= 65 and s["change"] >= 0])
+    bearish = len(ranked) - bullish
+    avg_score = round(sum([s["market_score"] for s in ranked]) / len(ranked), 1)
+    avg_volatility = round(sum([s["volatility"] for s in ranked]) / len(ranked), 2)
+
+    mood = "Bullish Dominance" if bullish > bearish and avg_score >= 70 else "Bearish / Caution Dominance" if bearish > bullish else "Mixed Market"
+
+    return jsonify({
+        "status": "active",
+        "updated_at": datetime.utcnow().isoformat(),
+        "market_mood": mood,
+        "bullish_count": bullish,
+        "bearish_count": bearish,
+        "average_market_score": avg_score,
+        "average_volatility": avg_volatility
+    })
+
+@app.route("/hdi/adaptive-feed")
+def adaptive_feed_api():
+    key = request.args.get("key")
+    if not key:
+        return jsonify({"error": "key required"}), 400
+
+    preferred = get_preferred_symbol(key)
+    ranked = generate_ranked_signals(key, limit=3)
+
+    return jsonify({
+        "status": "active",
+        "updated_at": datetime.utcnow().isoformat(),
+        "preferred_symbol": preferred,
+        "recommendations": [
+            {
+                "symbol": s["symbol"],
+                "score": s["market_score"],
+                "priority": s["priority"],
+                "recommendation": s["recommendation"]
+            }
+            for s in ranked
+        ]
+    })
+
 @app.route("/hdi/opportunity-intelligence")
 def opportunity_intelligence_api():
     key = request.args.get("key")
@@ -2528,4 +2991,5 @@ def pay():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
 
