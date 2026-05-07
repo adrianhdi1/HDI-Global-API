@@ -622,6 +622,124 @@ def portfolio_intelligence_html(api_key):
 
 
 
+
+def risk_intelligence_engine_html(api_key):
+    risk_items = []
+
+    try:
+        ranked = generate_ranked_signals(api_key, limit=5)
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+
+    for s in ranked:
+        volatility_risk = min(100, int(s["volatility"] * 12))
+        weak_score_risk = max(0, 100 - s["market_score"])
+        bearish_pressure = min(100, int((weak_score_risk * 0.65) + (volatility_risk * 0.35)))
+
+        if bearish_pressure >= 65:
+            risk_level = "HIGH RISK"
+            risk_note = "Momentum weakness or volatility pressure may cause unstable movement."
+        elif bearish_pressure >= 45:
+            risk_level = "MEDIUM RISK"
+            risk_note = "Conditions require monitoring before aggressive decisions."
+        else:
+            risk_level = "CONTROLLED RISK"
+            risk_note = "Risk appears controlled, but confirmation is still important."
+
+        risk_items.append({
+            "symbol": s["symbol"],
+            "risk_score": bearish_pressure,
+            "risk_level": risk_level,
+            "risk_note": risk_note,
+            "volatility": s["volatility"],
+            "market_score": s["market_score"]
+        })
+
+    portfolio_note = "No active portfolio risk detected because no holdings are added."
+    try:
+        holdings = get_portfolio(api_key)
+        if holdings:
+            total_amount = sum([float(h[2]) for h in holdings])
+            risk_total = 0
+            weakest = None
+            for holding_id, symbol, amount in holdings:
+                signal = generate_decision_signal(symbol, api_key)
+                weight = (float(amount) / total_amount) if total_amount else 0
+                asset_risk = 100 - signal["market_score"]
+                risk_total += asset_risk * weight
+                if weakest is None or signal["market_score"] < weakest["score"]:
+                    weakest = {"symbol": symbol, "score": signal["market_score"]}
+
+            portfolio_risk = round(risk_total, 1)
+            if portfolio_risk >= 45:
+                portfolio_note = f"High portfolio pressure detected: {portfolio_risk}/100. Weakest holding: {weakest['symbol']}."
+            elif portfolio_risk >= 25:
+                portfolio_note = f"Moderate portfolio pressure detected: {portfolio_risk}/100. Review weaker positions."
+            else:
+                portfolio_note = f"Portfolio risk appears controlled: {portfolio_risk}/100."
+    except:
+        portfolio_note = "Portfolio risk calculation unavailable."
+
+    try:
+        sectors = generate_sector_intelligence()
+        weakest_sector = sectors[-1] if sectors else None
+        sector_note = f"Weakest sector pressure: {weakest_sector['sector']} with score {weakest_sector['sector_score']}/100." if weakest_sector else "Sector risk is still being analyzed."
+    except:
+        sector_note = "Sector risk unavailable."
+
+    try:
+        economies = generate_economy_intelligence()
+        risk_zones = [e for e in economies if e["mood"] == "RISK ZONE"]
+        if risk_zones:
+            macro_note = f"Macro risk zone detected in {risk_zones[0]['economy']} with score {risk_zones[0]['total_score']}/100."
+        else:
+            macro_note = "No major macro risk zone detected in the current economy model."
+    except:
+        macro_note = "Macro risk unavailable."
+
+    asset_html = ""
+    for item in risk_items:
+        asset_html += f"""
+        <div class="box">
+            <b>{item["symbol"]}</b><br>
+            Risk Score: <span class="metric">{item["risk_score"]}/100</span><br>
+            Risk Level: <span class="gold">{item["risk_level"]}</span><br>
+            Market Score: {item["market_score"]}/100<br>
+            Volatility: {item["volatility"]}%<br>
+            <span class="muted">{item["risk_note"]}</span>
+        </div>
+        """
+
+    return f"""
+    <div class="grid">
+        <div class="box">
+            <b>Portfolio Risk Note</b><br>
+            <span class="gold">{portfolio_note}</span>
+        </div>
+
+        <div class="box">
+            <b>Sector Risk Note</b><br>
+            <span class="muted">{sector_note}</span>
+        </div>
+
+        <div class="box">
+            <b>Macro Risk Note</b><br>
+            <span class="muted">{macro_note}</span>
+        </div>
+
+        <div class="box">
+            <b>What Could Go Wrong</b><br>
+            <span class="muted">
+            Sudden volatility, negative news, weak confirmation, sector rotation, or macro pressure can weaken signals.
+            </span>
+        </div>
+    </div>
+
+    <h3 style="text-align:left;color:#e5e7eb;margin-left:10px;">Asset Risk Map</h3>
+    <div class="grid">{asset_html}</div>
+    """
+
+
 def ai_briefing_engine_html(api_key):
     try:
         top_signal = generate_ranked_signals(api_key, limit=1)[0]
@@ -1528,6 +1646,7 @@ def dashboard():
     behavioral = behavioral_intelligence_html(key)
     predictions = ai_prediction_engine_html(key)
     ai_briefing = ai_briefing_engine_html(key)
+    risk_intelligence = risk_intelligence_engine_html(key)
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -1549,6 +1668,7 @@ def dashboard():
 <a href="#signals">Signals</a>
 <a href="#predictions">Predictions</a>
 <a href="#briefing">AI Briefing</a>
+<a href="#risk">Risk</a>
 <a href="#watchlist">Watchlist</a>
 <a href="#performance">Performance</a>
 <a href="/hdi/methodology">Methodology</a>
@@ -1627,6 +1747,13 @@ def dashboard():
 <h2>ð§  HDI Analyst Briefing</h2>
 <p class="blue">A structured analyst-style briefing: what is happening, why it matters, what to watch, risk, and opportunity.</p>
 {ai_briefing}
+</div>
+
+<div class="card" id="risk">
+<div class="institution">Risk Intelligence Engine</div>
+<h2>ð¡ï¸ HDI Risk Intelligence</h2>
+<p class="blue">HDI analyzes asset risk, portfolio pressure, sector weakness, macro risk, and what could go wrong.</p>
+{risk_intelligence}
 </div>
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
@@ -2032,6 +2159,48 @@ def ranked_signals_api():
 
 
 
+
+
+@app.route("/hdi/risk-intelligence")
+def risk_intelligence_api():
+    key = request.args.get("key")
+    if not key:
+        return jsonify({"error": "key required"}), 400
+
+    assets = []
+    try:
+        ranked = generate_ranked_signals(key, limit=5)
+    except:
+        ranked = [generate_decision_signal(api_key=key)]
+
+    for s in ranked:
+        volatility_risk = min(100, int(s["volatility"] * 12))
+        weak_score_risk = max(0, 100 - s["market_score"])
+        risk_score = min(100, int((weak_score_risk * 0.65) + (volatility_risk * 0.35)))
+
+        if risk_score >= 65:
+            risk_level = "HIGH RISK"
+        elif risk_score >= 45:
+            risk_level = "MEDIUM RISK"
+        else:
+            risk_level = "CONTROLLED RISK"
+
+        assets.append({
+            "symbol": s["symbol"],
+            "risk_score": risk_score,
+            "risk_level": risk_level,
+            "market_score": s["market_score"],
+            "volatility": s["volatility"]
+        })
+
+    return jsonify({
+        "status": "active",
+        "updated_at": datetime.utcnow().isoformat(),
+        "assets": assets,
+        "sectors": generate_sector_intelligence(),
+        "economies": generate_economy_intelligence(),
+        "risk_disclaimer": "HDI provides decision intelligence, not financial advice."
+    })
 
 @app.route("/hdi/ai-briefing")
 def ai_briefing_api():
