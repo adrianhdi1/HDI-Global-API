@@ -623,6 +623,124 @@ def portfolio_intelligence_html(api_key):
 
 
 
+
+def opportunity_intelligence_engine_html(api_key):
+    opportunities = []
+
+    try:
+        ranked = generate_ranked_signals(api_key, limit=5)
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+
+    for s in ranked:
+        score = s["market_score"]
+        momentum = s["confidence_breakdown"]["momentum"]
+        trend = s["confidence_breakdown"]["trend_strength"]
+        relevance = s["confidence_breakdown"]["user_relevance"]
+        volatility_penalty = min(30, int(s["volatility"] * 3))
+
+        opportunity_score = min(100, max(0, int(
+            score * 0.40 +
+            momentum * 0.25 +
+            trend * 0.20 +
+            relevance * 0.15 -
+            volatility_penalty
+        )))
+
+        if opportunity_score >= 82:
+            level = "HIGH OPPORTUNITY"
+            label = "Breakout / Growth Watch"
+            confirmation = "Confirm momentum continuation and volume/news support."
+        elif opportunity_score >= 68:
+            level = "DEVELOPING OPPORTUNITY"
+            label = "Accumulation / Setup Zone"
+            confirmation = "Wait for stronger confirmation before aggressive exposure."
+        elif opportunity_score >= 55:
+            level = "EARLY OPPORTUNITY"
+            label = "Formation Stage"
+            confirmation = "Monitor price behavior and sector strength."
+        else:
+            level = "LOW OPPORTUNITY"
+            label = "No Clear Setup"
+            confirmation = "Avoid rushing until score improves."
+
+        opportunities.append({
+            "symbol": s["symbol"],
+            "opportunity_score": opportunity_score,
+            "level": level,
+            "label": label,
+            "confirmation": confirmation,
+            "market_score": score,
+            "priority": s["priority"],
+            "recommendation": s["recommendation"]
+        })
+
+    try:
+        sectors = generate_sector_intelligence()
+        best_sector = sectors[0] if sectors else None
+        sector_note = f"{best_sector['sector']} is the strongest sector opportunity with score {best_sector['sector_score']}/100." if best_sector else "Sector opportunity is still forming."
+    except:
+        sector_note = "Sector opportunity unavailable."
+
+    try:
+        economies = generate_economy_intelligence()
+        opportunity_economies = [e for e in economies if e["mood"] == "OPPORTUNITY ZONE"]
+        if opportunity_economies:
+            best_economy = opportunity_economies[0]
+        else:
+            best_economy = economies[0] if economies else None
+        economy_note = f"{best_economy['economy']} shows {best_economy['mood']} with score {best_economy['total_score']}/100." if best_economy else "Economy opportunity is still forming."
+    except:
+        economy_note = "Economy opportunity unavailable."
+
+    asset_html = ""
+    for item in opportunities:
+        asset_html += f"""
+        <div class="box">
+            <b>{item["symbol"]}</b><br>
+            Opportunity Score: <span class="metric">{item["opportunity_score"]}/100</span><br>
+            Level: <span class="gold">{item["level"]}</span><br>
+            Setup: {item["label"]}<br>
+            Market Score: {item["market_score"]}/100<br>
+            Priority: {item["priority"]}<br><br>
+            <b>Confirmation Needed:</b><br>
+            <span class="muted">{item["confirmation"]}</span><br><br>
+            <span class="blue">{item["recommendation"]}</span>
+        </div>
+        """
+
+    return f"""
+    <div class="grid">
+        <div class="box">
+            <b>Best Sector Opportunity</b><br>
+            <span class="gold">{sector_note}</span>
+        </div>
+
+        <div class="box">
+            <b>Best Economy Opportunity</b><br>
+            <span class="gold">{economy_note}</span>
+        </div>
+
+        <div class="box">
+            <b>Why Opportunity Matters</b><br>
+            <span class="muted">
+            HDI combines signal strength, momentum, trend quality, user relevance, sector context, and volatility pressure to find opportunity zones.
+            </span>
+        </div>
+
+        <div class="box">
+            <b>Confirmation Rule</b><br>
+            <span class="muted">
+            Opportunity is not a guarantee. HDI requires confirmation from momentum, sector strength, risk level, and news sentiment before aggressive decisions.
+            </span>
+        </div>
+    </div>
+
+    <h3 style="text-align:left;color:#e5e7eb;margin-left:10px;">Asset Opportunity Map</h3>
+    <div class="grid">{asset_html}</div>
+    """
+
+
 def risk_intelligence_engine_html(api_key):
     risk_items = []
 
@@ -1647,6 +1765,7 @@ def dashboard():
     predictions = ai_prediction_engine_html(key)
     ai_briefing = ai_briefing_engine_html(key)
     risk_intelligence = risk_intelligence_engine_html(key)
+    opportunity_intelligence = opportunity_intelligence_engine_html(key)
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -1669,6 +1788,7 @@ def dashboard():
 <a href="#predictions">Predictions</a>
 <a href="#briefing">AI Briefing</a>
 <a href="#risk">Risk</a>
+<a href="#opportunity">Opportunity</a>
 <a href="#watchlist">Watchlist</a>
 <a href="#performance">Performance</a>
 <a href="/hdi/methodology">Methodology</a>
@@ -1754,6 +1874,13 @@ def dashboard():
 <h2>ð¡ï¸ HDI Risk Intelligence</h2>
 <p class="blue">HDI analyzes asset risk, portfolio pressure, sector weakness, macro risk, and what could go wrong.</p>
 {risk_intelligence}
+</div>
+
+<div class="card" id="opportunity">
+<div class="institution">Opportunity Intelligence Engine</div>
+<h2>ð HDI Opportunity Intelligence</h2>
+<p class="blue">HDI identifies asset opportunities, sector strength, economy opportunity zones, and confirmation needed.</p>
+{opportunity_intelligence}
 </div>
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
@@ -2160,6 +2287,66 @@ def ranked_signals_api():
 
 
 
+
+
+@app.route("/hdi/opportunity-intelligence")
+def opportunity_intelligence_api():
+    key = request.args.get("key")
+    if not key:
+        return jsonify({"error": "key required"}), 400
+
+    data = []
+    try:
+        ranked = generate_ranked_signals(key, limit=5)
+    except:
+        ranked = [generate_decision_signal(api_key=key)]
+
+    for s in ranked:
+        score = s["market_score"]
+        momentum = s["confidence_breakdown"]["momentum"]
+        trend = s["confidence_breakdown"]["trend_strength"]
+        relevance = s["confidence_breakdown"]["user_relevance"]
+        volatility_penalty = min(30, int(s["volatility"] * 3))
+
+        opportunity_score = min(100, max(0, int(
+            score * 0.40 +
+            momentum * 0.25 +
+            trend * 0.20 +
+            relevance * 0.15 -
+            volatility_penalty
+        )))
+
+        if opportunity_score >= 82:
+            level = "HIGH OPPORTUNITY"
+            label = "Breakout / Growth Watch"
+        elif opportunity_score >= 68:
+            level = "DEVELOPING OPPORTUNITY"
+            label = "Accumulation / Setup Zone"
+        elif opportunity_score >= 55:
+            level = "EARLY OPPORTUNITY"
+            label = "Formation Stage"
+        else:
+            level = "LOW OPPORTUNITY"
+            label = "No Clear Setup"
+
+        data.append({
+            "symbol": s["symbol"],
+            "opportunity_score": opportunity_score,
+            "level": level,
+            "label": label,
+            "market_score": score,
+            "priority": s["priority"],
+            "recommendation": s["recommendation"]
+        })
+
+    return jsonify({
+        "status": "active",
+        "updated_at": datetime.utcnow().isoformat(),
+        "opportunities": data,
+        "sectors": generate_sector_intelligence(),
+        "economies": generate_economy_intelligence(),
+        "disclaimer": "Opportunity intelligence is not financial advice."
+    })
 
 @app.route("/hdi/risk-intelligence")
 def risk_intelligence_api():
