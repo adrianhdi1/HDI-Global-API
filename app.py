@@ -618,6 +618,112 @@ def portfolio_intelligence_html(api_key):
 
 
 
+
+def behavioral_intelligence_html(api_key):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT symbol, action, SUM(count) AS total
+            FROM user_behavior
+            WHERE api_key=%s
+            GROUP BY symbol, action
+            ORDER BY total DESC
+            LIMIT 20
+        """, (api_key,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except:
+        rows = []
+
+    if not rows:
+        return """
+        <p class='muted'>
+        HDI has not collected enough behavior data yet. Add watchlist items, open signals, and build your portfolio to activate behavioral intelligence.
+        </p>
+        """
+
+    symbol_totals = {}
+    action_totals = {}
+
+    for symbol, action, total in rows:
+        symbol_totals[symbol] = symbol_totals.get(symbol, 0) + int(total)
+        action_totals[action] = action_totals.get(action, 0) + int(total)
+
+    favorite_symbol = max(symbol_totals, key=symbol_totals.get) if symbol_totals else "Learning"
+    dominant_action = max(action_totals, key=action_totals.get) if action_totals else "Learning"
+
+    total_activity = sum(symbol_totals.values()) if symbol_totals else 0
+
+    if total_activity >= 12:
+        activity_level = "HIGH"
+    elif total_activity >= 5:
+        activity_level = "MEDIUM"
+    else:
+        activity_level = "LOW"
+
+    if dominant_action == "signal_open":
+        decision_style = "Signal-driven decision maker"
+    elif dominant_action == "portfolio":
+        decision_style = "Portfolio-focused strategist"
+    elif dominant_action == "watchlist":
+        decision_style = "Market observer / watchlist builder"
+    else:
+        decision_style = "Adaptive intelligence profile forming"
+
+    risk_appetite = "Balanced"
+    try:
+        preferred_signal = generate_decision_signal(symbol=favorite_symbol, api_key=api_key)
+        if preferred_signal["market_score"] >= 80:
+            risk_appetite = "Growth-oriented"
+        elif preferred_signal["market_score"] < 60:
+            risk_appetite = "Cautious"
+    except:
+        pass
+
+    focus_rows = ""
+    for symbol, total in sorted(symbol_totals.items(), key=lambda x: x[1], reverse=True)[:5]:
+        focus_rows += f"""
+        <div class="box">
+            <b>{symbol}</b><br>
+            Behavior Weight: <span class="metric">{total}</span><br>
+            <span class="muted">Repeated interest detected</span>
+        </div>
+        """
+
+    return f"""
+    <div class="grid">
+        <div class="box">
+            <b>Favorite Asset</b><br>
+            <span class="metric">{favorite_symbol}</span><br>
+            <span class="muted">Most repeated user focus</span>
+        </div>
+
+        <div class="box">
+            <b>Decision Style</b><br>
+            <span class="gold">{decision_style}</span><br>
+            <span class="muted">Based on watchlist, portfolio, and signal activity</span>
+        </div>
+
+        <div class="box">
+            <b>Activity Level</b><br>
+            <span class="metric">{activity_level}</span><br>
+            <span class="muted">Total behavior events: {total_activity}</span>
+        </div>
+
+        <div class="box">
+            <b>Risk Appetite</b><br>
+            <span class="gold">{risk_appetite}</span><br>
+            <span class="muted">Adaptive estimate from market focus</span>
+        </div>
+    </div>
+
+    <h3 style="text-align:left;color:#e5e7eb;margin-left:10px;">Behavior Focus Map</h3>
+    <div class="grid">{focus_rows}</div>
+    """
+
+
 def institutional_heatmap_html(api_key):
     stock_cells = ""
     for symbol in SYMBOLS:
@@ -1111,6 +1217,7 @@ def dashboard():
     live_stream = live_intelligence_stream_html(key)
     smart_alerts = smart_alerts_html(key)
     heatmap = institutional_heatmap_html(key)
+    behavioral = behavioral_intelligence_html(key)
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -1124,6 +1231,7 @@ def dashboard():
 <a href="#live">Live Stream</a>
 <a href="#alerts">Alerts</a>
 <a href="#heatmap">Heatmap</a>
+<a href="#behavior">Behavior</a>
 <a href="#portfolio">Portfolio</a>
 <a href="#economy">Economy</a>
 <a href="#sectors">Sectors</a>
@@ -1169,6 +1277,13 @@ def dashboard():
 <h2>ð§­ HDI Market Heatmap</h2>
 <p class="blue">Visual map of stock strength, sector opportunity, and economy pressure.</p>
 {heatmap}
+</div>
+
+<div class="card" id="behavior">
+<div class="institution">Behavioral Intelligence Engine</div>
+<h2>ð§¬ HDI User Behavior Intelligence</h2>
+<p class="blue">HDI learns your focus, decision style, activity level, and risk appetite over time.</p>
+{behavioral}
 </div>
 
 <div class="card" id="portfolio">
@@ -1305,6 +1420,51 @@ def portfolio_api():
 
 
 
+
+
+@app.route("/hdi/behavioral-intelligence")
+def behavioral_intelligence_api():
+    key = request.args.get("key")
+    if not key:
+        return jsonify({"error": "key required"}), 400
+
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT symbol, action, SUM(count) AS total
+            FROM user_behavior
+            WHERE api_key=%s
+            GROUP BY symbol, action
+            ORDER BY total DESC
+            LIMIT 50
+        """, (key,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except:
+        rows = []
+
+    symbol_totals = {}
+    action_totals = {}
+
+    for symbol, action, total in rows:
+        symbol_totals[symbol] = symbol_totals.get(symbol, 0) + int(total)
+        action_totals[action] = action_totals.get(action, 0) + int(total)
+
+    favorite_symbol = max(symbol_totals, key=symbol_totals.get) if symbol_totals else None
+    dominant_action = max(action_totals, key=action_totals.get) if action_totals else None
+    total_activity = sum(symbol_totals.values()) if symbol_totals else 0
+
+    return jsonify({
+        "status": "active",
+        "updated_at": datetime.utcnow().isoformat(),
+        "favorite_symbol": favorite_symbol,
+        "dominant_action": dominant_action,
+        "total_activity": total_activity,
+        "symbol_focus": symbol_totals,
+        "action_focus": action_totals
+    })
 
 @app.route("/hdi/heatmap")
 def heatmap_api():
