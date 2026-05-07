@@ -617,6 +617,90 @@ def portfolio_intelligence_html(api_key):
 
 
 
+
+def institutional_heatmap_html(api_key):
+    stock_cells = ""
+    for symbol in SYMBOLS:
+        signal = generate_decision_signal(symbol=symbol, api_key=api_key)
+        score = signal["market_score"]
+        if score >= 80:
+            level = "Strong"
+            cls = "heat-strong"
+        elif score >= 65:
+            level = "Watch"
+            cls = "heat-watch"
+        else:
+            level = "Risk"
+            cls = "heat-risk"
+
+        stock_cells += f"""
+        <div class="heat-cell {cls}">
+            <b>{symbol}</b><br>
+            <span>{score}/100</span><br>
+            <small>{level}</small>
+        </div>
+        """
+
+    sector_cells = ""
+    try:
+        for s in generate_sector_intelligence()[:6]:
+            score = s["sector_score"]
+            if score >= 80:
+                cls = "heat-strong"
+            elif score >= 65:
+                cls = "heat-watch"
+            else:
+                cls = "heat-risk"
+
+            sector_cells += f"""
+            <div class="heat-cell {cls}">
+                <b>{s["sector"]}</b><br>
+                <span>{score}/100</span><br>
+                <small>{s["priority"]}</small>
+            </div>
+            """
+    except:
+        sector_cells = "<p class='muted'>Sector heatmap unavailable.</p>"
+
+    economy_cells = ""
+    try:
+        for e in generate_economy_intelligence()[:5]:
+            score = e["total_score"]
+            if e["mood"] == "OPPORTUNITY ZONE":
+                cls = "heat-strong"
+            elif e["mood"] == "WATCH ZONE":
+                cls = "heat-watch"
+            else:
+                cls = "heat-risk"
+
+            economy_cells += f"""
+            <div class="heat-cell {cls}">
+                <b>{e["economy"]}</b><br>
+                <span>{score}/100</span><br>
+                <small>{e["mood"]}</small>
+            </div>
+            """
+    except:
+        economy_cells = "<p class='muted'>Economy heatmap unavailable.</p>"
+
+    return f"""
+    <div class="heat-section">
+        <h3>Stock Strength Heatmap</h3>
+        <div class="heat-grid">{stock_cells}</div>
+    </div>
+
+    <div class="heat-section">
+        <h3>Sector Strength Heatmap</h3>
+        <div class="heat-grid">{sector_cells}</div>
+    </div>
+
+    <div class="heat-section">
+        <h3>Economy Pressure Heatmap</h3>
+        <div class="heat-grid">{economy_cells}</div>
+    </div>
+    """
+
+
 def smart_alerts_html(api_key):
     alerts = []
 
@@ -903,6 +987,16 @@ def base_style():
     @keyframes pulseIn{from{opacity:.3;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
     .alert-box{background:rgba(127,29,29,.22);border:1px solid rgba(248,113,113,.22);padding:16px;margin:10px;border-radius:18px;text-align:left;box-shadow:0 0 22px rgba(127,29,29,.12);}
     .alert-box b{color:#fecaca;}
+    .heat-section{margin-top:22px;text-align:left;}
+    .heat-section h3{color:#e5e7eb;text-align:left;margin-left:10px;}
+    .heat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin:10px;}
+    .heat-cell{padding:16px;border-radius:18px;text-align:left;min-height:92px;border:1px solid rgba(255,255,255,.08);box-shadow:0 0 22px rgba(0,0,0,.18);}
+    .heat-cell b{font-size:14px;}
+    .heat-cell span{font-size:24px;font-weight:bold;}
+    .heat-cell small{color:#cbd5e1;}
+    .heat-strong{background:rgba(22,101,52,.38);border-color:rgba(34,197,94,.35);}
+    .heat-watch{background:rgba(113,63,18,.38);border-color:rgba(250,204,21,.30);}
+    .heat-risk{background:rgba(127,29,29,.38);border-color:rgba(248,113,113,.30);}
     </style>
     """
 
@@ -1016,6 +1110,7 @@ def dashboard():
     brief = executive_brief_html(key)
     live_stream = live_intelligence_stream_html(key)
     smart_alerts = smart_alerts_html(key)
+    heatmap = institutional_heatmap_html(key)
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -1028,6 +1123,7 @@ def dashboard():
 <a href="#brief">Brief</a>
 <a href="#live">Live Stream</a>
 <a href="#alerts">Alerts</a>
+<a href="#heatmap">Heatmap</a>
 <a href="#portfolio">Portfolio</a>
 <a href="#economy">Economy</a>
 <a href="#sectors">Sectors</a>
@@ -1066,6 +1162,13 @@ def dashboard():
 <h2>ð¨ HDI Smart Alerts</h2>
 <p class="blue">HDI alerts you when signals, portfolio risk, sectors, macro conditions, or news sentiment require attention.</p>
 <div class="grid">{smart_alerts}</div>
+</div>
+
+<div class="card" id="heatmap">
+<div class="institution">Institutional Heatmap</div>
+<h2>ð§­ HDI Market Heatmap</h2>
+<p class="blue">Visual map of stock strength, sector opportunity, and economy pressure.</p>
+{heatmap}
 </div>
 
 <div class="card" id="portfolio">
@@ -1201,6 +1304,31 @@ def portfolio_api():
     return jsonify([{"id": h[0], "symbol": h[1], "amount": h[2]} for h in holdings])
 
 
+
+
+@app.route("/hdi/heatmap")
+def heatmap_api():
+    key = request.args.get("key")
+    if not key:
+        return jsonify({"error": "key required"}), 400
+
+    stocks = []
+    for symbol in SYMBOLS:
+        signal = generate_decision_signal(symbol=symbol, api_key=key)
+        stocks.append({
+            "symbol": symbol,
+            "score": signal["market_score"],
+            "priority": signal["priority"],
+            "change": signal["change"]
+        })
+
+    return jsonify({
+        "status": "active",
+        "updated_at": datetime.utcnow().isoformat(),
+        "stocks": stocks,
+        "sectors": generate_sector_intelligence(),
+        "economies": generate_economy_intelligence()
+    })
 
 @app.route("/hdi/alerts")
 def alerts_api():
