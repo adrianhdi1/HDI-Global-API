@@ -619,6 +619,147 @@ def portfolio_intelligence_html(api_key):
 
 
 
+
+def admin_intelligence_console_html():
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+
+        cur.execute("SELECT COUNT(*) FROM users")
+        users_count = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM access_requests")
+        access_requests_count = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM user_behavior")
+        behavior_events_count = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM signal_history")
+        signals_saved_count = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM portfolio")
+        portfolio_holdings_count = cur.fetchone()[0]
+
+        cur.execute("""
+            SELECT symbol, SUM(count) AS total
+            FROM user_behavior
+            GROUP BY symbol
+            ORDER BY total DESC
+            LIMIT 8
+        """)
+        top_assets = cur.fetchall()
+
+        cur.execute("""
+            SELECT action, SUM(count) AS total
+            FROM user_behavior
+            GROUP BY action
+            ORDER BY total DESC
+            LIMIT 8
+        """)
+        top_actions = cur.fetchall()
+
+        cur.execute("""
+            SELECT name, email, api_key, created_at
+            FROM access_requests
+            ORDER BY id DESC
+            LIMIT 8
+        """)
+        latest_requests = cur.fetchall()
+
+        cur.execute("""
+            SELECT symbol, action, score, result, created_at
+            FROM signal_history
+            ORDER BY id DESC
+            LIMIT 8
+        """)
+        latest_signals = cur.fetchall()
+
+        cur.close()
+        conn.close()
+    except Exception as e:
+        return f"<p class='muted'>Admin console unavailable: {str(e)}</p>"
+
+    assets_html = ""
+    for symbol, total in top_assets:
+        assets_html += f"""
+        <div class="box">
+            <b>{symbol}</b><br>
+            User Focus Score: <span class="metric">{total}</span>
+        </div>
+        """
+
+    actions_html = ""
+    for action, total in top_actions:
+        actions_html += f"""
+        <div class="box">
+            <b>{action}</b><br>
+            Activity Count: <span class="metric">{total}</span>
+        </div>
+        """
+
+    requests_html = ""
+    for name, email, api_key, created_at in latest_requests:
+        requests_html += f"""
+        <div class="box">
+            <b>{name}</b><br>
+            <span class="muted">{email}</span><br>
+            <small>{created_at}</small>
+        </div>
+        """
+
+    signals_html = ""
+    for symbol, action, score, result, created_at in latest_signals:
+        signals_html += f"""
+        <div class="box">
+            <b>{symbol}</b><br>
+            Score: <span class="metric">{score}</span><br>
+            Result: {result}<br>
+            <span class="muted">{action}</span><br>
+            <small>{created_at}</small>
+        </div>
+        """
+
+    return f"""
+    <div class="card">
+        <div class="institution">Founder Intelligence Overview</div>
+        <h1>Admin Intelligence Console</h1>
+        <p class="blue">HDI operational intelligence for users, behavior, access, portfolio activity, and signals.</p>
+
+        <div class="grid">
+            <div class="box"><b>Total Users</b><br><span class="metric">{users_count}</span></div>
+            <div class="box"><b>Access Requests</b><br><span class="metric">{access_requests_count}</span></div>
+            <div class="box"><b>Behavior Events</b><br><span class="metric">{behavior_events_count}</span></div>
+            <div class="box"><b>Signals Saved</b><br><span class="metric">{signals_saved_count}</span></div>
+            <div class="box"><b>Portfolio Holdings</b><br><span class="metric">{portfolio_holdings_count}</span></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="institution">User Focus Intelligence</div>
+        <h2>ð¥ Most Watched / Used Assets</h2>
+        <div class="grid">{assets_html if assets_html else "<p class='muted'>No asset behavior yet.</p>"}</div>
+    </div>
+
+    <div class="card">
+        <div class="institution">Behavior Trends</div>
+        <h2>ð§  Most Common User Actions</h2>
+        <div class="grid">{actions_html if actions_html else "<p class='muted'>No behavior actions yet.</p>"}</div>
+    </div>
+
+    <div class="card">
+        <div class="institution">Access Pipeline</div>
+        <h2>ð© Latest Access Requests</h2>
+        <div class="grid">{requests_html if requests_html else "<p class='muted'>No access requests yet.</p>"}</div>
+    </div>
+
+    <div class="card">
+        <div class="institution">Signal Operations</div>
+        <h2>ð Latest Saved Signals</h2>
+        <div class="grid">{signals_html if signals_html else "<p class='muted'>No saved signals yet.</p>"}</div>
+    </div>
+    """
+
+
 def behavioral_intelligence_html(api_key):
     try:
         conn = get_conn()
@@ -1703,6 +1844,33 @@ def real_signal_api():
 def ranked_signals_api():
     key = request.args.get("user_key")
     return jsonify(generate_ranked_signals(key))
+
+
+@app.route("/hdi/admin-console")
+def admin_console():
+    if ADMIN_KEY and request.args.get("key") != ADMIN_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    console = admin_intelligence_console_html()
+
+    return f"""
+<html>
+<head>
+<title>HDI Admin Intelligence Console</title>
+{base_style()}
+</head>
+<body>
+<div class="container">
+<div class="nav">
+<a href="/hdi/admin-console?key={request.args.get("key")}">Admin Console</a>
+<a href="/hdi/admin?key={request.args.get("key")}">Admin JSON</a>
+<a href="/">Home</a>
+</div>
+{console}
+</div>
+</body>
+</html>
+"""
 
 @app.route("/hdi/admin")
 def admin():
