@@ -9,6 +9,14 @@ ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY")
 ADMIN_KEY = os.environ.get("ADMIN_KEY")
 
 SYMBOLS = ["AAPL", "MSFT", "TSLA", "NVDA", "AMZN", "GOOGL", "META"]
+EXPANDED_ASSETS = {
+    "Stocks": ["AAPL", "MSFT", "TSLA", "NVDA", "AMZN", "GOOGL", "META", "AMD", "NFLX", "JPM"],
+    "Crypto": ["BTC", "ETH", "SOL", "BNB", "XRP"],
+    "Forex": ["EURUSD", "GBPUSD", "USDJPY", "USDCHF"],
+    "Commodities": ["GOLD", "OIL", "SILVER", "COPPER"],
+    "Indexes": ["SPY", "QQQ", "DIA", "IWM"]
+}
+ALL_ASSETS = sorted(list(set([item for group in EXPANDED_ASSETS.values() for item in group])))
 
 SECTORS = {
     "Artificial Intelligence": ["NVDA", "MSFT", "GOOGL"],
@@ -86,6 +94,40 @@ def init_db():
         id SERIAL PRIMARY KEY,
         api_key TEXT UNIQUE,
         risk_profile TEXT DEFAULT 'Balanced',
+        layout TEXT DEFAULT 'default',
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS analyst_notes (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        symbol TEXT,
+        note TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS alert_rules (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        symbol TEXT,
+        rule_type TEXT,
+        threshold REAL,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS teams (
+        id SERIAL PRIMARY KEY,
+        team_name TEXT,
+        owner_key TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS team_members (
+        id SERIAL PRIMARY KEY,
+        team_id INTEGER,
+        name TEXT,
+        email TEXT,
+        role TEXT,
         created_at TEXT
     )""")
     conn.commit()
@@ -1159,6 +1201,229 @@ def enterprise_hedge_fund_mode_html(api_key):
         <div class="box"><b>Advanced Analytics</b><br><span class="muted">Risk, opportunity, forecasts, heatmaps, and strategy engines combined.</span></div>
         <div class="box"><b>Execution Layer</b><br><span class="muted">Future-ready layer for enterprise workflows and portfolio action planning.</span></div>
         <div class="box"><b>Enterprise Access</b><br><span class="muted">Designed for hedge funds, banks, companies, governments, and analysts.</span></div>
+    </div>
+    """
+
+
+def premium_gate_html(user, section_name):
+    try:
+        if is_premium(user[4], user[5]):
+            return ""
+    except:
+        pass
+    return f"""
+    <div class="box">
+        <b>{section_name} â Pro Access</b><br>
+        <span class="muted">This section is prepared for premium/institutional users. You can request access from the dashboard.</span>
+    </div>
+    """
+
+def get_user_layout(api_key):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT layout FROM user_preferences WHERE api_key=%s", (api_key,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return row[0] if row and row[0] else "default"
+    except:
+        return "default"
+
+def set_user_layout(api_key, layout):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO user_preferences(api_key,layout,created_at)
+            VALUES(%s,%s,%s)
+            ON CONFLICT (api_key)
+            DO UPDATE SET layout=EXCLUDED.layout
+        """, (api_key, layout, datetime.utcnow().isoformat()))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except:
+        pass
+
+def search_filter_system_html(api_key):
+    options = "".join([f"<option>{a}</option>" for a in ALL_ASSETS])
+    return f"""
+    <form action="/hdi/search" method="GET">
+        <input type="hidden" name="key" value="{api_key}">
+        <select name="query">{options}</select><br>
+        <button type="submit">Search Asset</button>
+    </form>
+    <p class="muted">Search assets, sectors, economies, signals, and intelligence layers.</p>
+    """
+
+def favorite_dashboard_layout_html(api_key):
+    current = get_user_layout(api_key)
+    return f"""
+    <div class="box">
+        <b>Current Layout</b><br>
+        <span class="metric">{current}</span><br>
+        <span class="muted">Choose which dashboard style should guide your workflow.</span>
+    </div>
+    <form action="/hdi/set-layout" method="POST">
+        <input type="hidden" name="key" value="{api_key}">
+        <select name="layout">
+            <option>default</option>
+            <option>portfolio-first</option>
+            <option>signals-first</option>
+            <option>risk-first</option>
+            <option>executive-first</option>
+        </select><br>
+        <button type="submit">Save Layout</button>
+    </form>
+    """
+
+def analyst_notes_html(api_key):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT symbol,note,created_at FROM analyst_notes WHERE api_key=%s ORDER BY id DESC LIMIT 8", (api_key,))
+        notes = cur.fetchall()
+        cur.close()
+        conn.close()
+    except:
+        notes = []
+    notes_html = ""
+    for symbol, note, created_at in notes:
+        notes_html += f"""
+        <div class="box">
+            <b>{symbol}</b><br>
+            <span class="muted">{note}</span><br>
+            <small>{created_at}</small>
+        </div>
+        """
+    options = "".join([f"<option>{a}</option>" for a in SYMBOLS])
+    return f"""
+    <form action="/hdi/add-note" method="POST">
+        <input type="hidden" name="key" value="{api_key}">
+        <select name="symbol">{options}</select><br>
+        <input name="note" placeholder="Write your analyst note"><br>
+        <button type="submit">Save Note</button>
+    </form>
+    <div class="grid">{notes_html if notes_html else "<p class='muted'>No analyst notes yet.</p>"}</div>
+    """
+
+def signal_outcome_checker_html(api_key):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT symbol,score,result,created_at FROM signal_history WHERE api_key=%s ORDER BY id DESC LIMIT 8", (api_key,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except:
+        rows = []
+    if not rows:
+        return "<p class='muted'>Open signals to begin outcome tracking.</p>"
+    html = ""
+    for symbol, score, result, created_at in rows:
+        simulated_status = result if result != "pending" else "pending / monitoring"
+        html += f"""
+        <div class="box">
+            <b>{symbol}</b><br>
+            Original Score: <span class="metric">{score}</span><br>
+            Outcome: <span class="gold">{simulated_status}</span><br>
+            <small>{created_at}</small>
+        </div>
+        """
+    return html
+
+def watchlist_alert_rules_html(api_key):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT id,symbol,rule_type,threshold,created_at FROM alert_rules WHERE api_key=%s ORDER BY id DESC LIMIT 8", (api_key,))
+        rules = cur.fetchall()
+        cur.close()
+        conn.close()
+    except:
+        rules = []
+    options = "".join([f"<option>{a}</option>" for a in SYMBOLS])
+    rules_html = ""
+    for rid, symbol, rule_type, threshold, created_at in rules:
+        rules_html += f"""
+        <div class="box">
+            <b>{symbol}</b><br>
+            Rule: {rule_type} {threshold}<br>
+            <small>{created_at}</small><br>
+            <a href="/hdi/delete-alert-rule?key={api_key}&rule_id={rid}" style="color:#ef4444;">Delete Rule</a>
+        </div>
+        """
+    return f"""
+    <form action="/hdi/add-alert-rule" method="POST">
+        <input type="hidden" name="key" value="{api_key}">
+        <select name="symbol">{options}</select><br>
+        <select name="rule_type"><option>score_above</option><option>score_below</option><option>risk_above</option></select><br>
+        <input name="threshold" placeholder="Threshold e.g. 80"><br>
+        <button type="submit">Create Alert Rule</button>
+    </form>
+    <div class="grid">{rules_html if rules_html else "<p class='muted'>No alert rules yet.</p>"}</div>
+    """
+
+def premium_access_control_html(user):
+    try:
+        premium = is_premium(user[4], user[5])
+    except:
+        premium = False
+    if premium:
+        return """<div class="box"><b>Premium Status</b><br><span class="metric">ACTIVE</span><br><span class="muted">Institutional/pro features unlocked.</span></div>"""
+    return """<div class="box"><b>Premium Access Control</b><br><span class="metric">FREE</span><br><span class="muted">Advanced institutional modules can be gated for premium users when payments/access approval is ready.</span></div>"""
+
+def team_accounts_html(api_key):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT id,team_name,created_at FROM teams WHERE owner_key=%s ORDER BY id DESC LIMIT 5", (api_key,))
+        teams = cur.fetchall()
+        team_html = ""
+        for team_id, team_name, created_at in teams:
+            cur.execute("SELECT name,email,role FROM team_members WHERE team_id=%s ORDER BY id DESC LIMIT 5", (team_id,))
+            members = cur.fetchall()
+            members_text = "".join([f"<br>{m[0]} â {m[2]} <span class='muted'>({m[1]})</span>" for m in members]) or "<br><span class='muted'>No members yet.</span>"
+            team_html += f"<div class='box'><b>{team_name}</b><br><small>Team ID: {team_id}</small><br><small>{created_at}</small>{members_text}</div>"
+        cur.close()
+        conn.close()
+    except:
+        team_html = ""
+    return f"""
+    <form action="/hdi/create-team" method="POST">
+        <input type="hidden" name="key" value="{api_key}">
+        <input name="team_name" placeholder="Institution / Team Name"><br>
+        <button type="submit">Create Team</button>
+    </form>
+    <form action="/hdi/add-team-member" method="POST">
+        <input type="hidden" name="key" value="{api_key}">
+        <input name="team_id" placeholder="Team ID"><br>
+        <input name="name" placeholder="Member Name"><br>
+        <input name="email" placeholder="Member Email"><br>
+        <select name="role"><option>Analyst</option><option>Manager</option><option>Viewer</option></select><br>
+        <button type="submit">Add Team Member</button>
+    </form>
+    <div class="grid">{team_html if team_html else "<p class='muted'>No teams yet.</p>"}</div>
+    """
+
+def data_export_html(api_key):
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Portfolio JSON</b><br><a class="btn" href="/hdi/export/portfolio?key={api_key}">Export</a></div>
+        <div class="box"><b>Signals JSON</b><br><a class="btn" href="/hdi/export/signals?key={api_key}">Export</a></div>
+        <div class="box"><b>Behavior JSON</b><br><a class="btn" href="/hdi/export/behavior?key={api_key}">Export</a></div>
+        <div class="box"><b>Report JSON</b><br><a class="btn" href="/hdi/export/report?key={api_key}">Export</a></div>
+    </div>
+    """
+
+def ui_performance_optimization_html():
+    return """
+    <div class="grid">
+        <div class="box"><b>Responsive Layout</b><br><span class="muted">Cards adapt automatically to mobile and desktop.</span></div>
+        <div class="box"><b>Cleaner UI</b><br><span class="muted">Glass cards, compact sections, and navigation anchors reduce overload.</span></div>
+        <div class="box"><b>Optimized Sections</b><br><span class="muted">Heavy engines are organized into modules for easier scanning.</span></div>
+        <div class="box"><b>Future Optimization</b><br><span class="muted">Next step can add lazy loading and separate pages per engine.</span></div>
     </div>
     """
 
@@ -2910,6 +3175,15 @@ def dashboard():
     capital_allocation = capital_allocation_engine_html(key)
     news_correlation = news_correlation_engine_html(key)
     quantum_layer = quantum_intelligence_concept_html(key)
+    search_filter = search_filter_system_html(key)
+    favorite_layout = favorite_dashboard_layout_html(key)
+    analyst_notes = analyst_notes_html(key)
+    outcome_checker = signal_outcome_checker_html(key)
+    alert_rules = watchlist_alert_rules_html(key)
+    premium_control = premium_access_control_html(user)
+    team_accounts = team_accounts_html(key)
+    data_exports = data_export_html(key)
+    ui_performance = ui_performance_optimization_html()
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -2964,6 +3238,15 @@ def dashboard():
 <a href="#allocation">Allocation</a>
 <a href="#correlation">News Correlation</a>
 <a href="#quantum">Quantum</a>
+<a href="#search-filter">Search</a>
+<a href="#layout">Layout</a>
+<a href="#notes">Notes</a>
+<a href="#outcomes">Outcomes</a>
+<a href="#alert-rules">Alert Rules</a>
+<a href="#premium-control">Premium</a>
+<a href="#teams">Teams</a>
+<a href="#exports">Exports</a>
+<a href="#ui-performance">UI Speed</a>
 <a href="#watchlist">Watchlist</a>
 <a href="#performance">Performance</a>
 <a href="/hdi/methodology">Methodology</a>
@@ -3294,6 +3577,69 @@ def dashboard():
 <h2>ð§¿ Quantum Scenario Intelligence</h2>
 <p class="blue">Future-style multi-scenario projections, probability branches, and strategic future mapping.</p>
 {quantum_layer}
+</div>
+
+<div class="card" id="search-filter">
+<div class="institution">Search & Filter System</div>
+<h2>ð HDI Search</h2>
+<p class="blue">Search assets, sectors, reports, alerts, and intelligence layers.</p>
+{search_filter}
+</div>
+
+<div class="card" id="layout">
+<div class="institution">Favorite Dashboard Layout</div>
+<h2>ð§© Dashboard Layout Preference</h2>
+<p class="blue">Choose the workflow style you want HDI to prioritize.</p>
+{favorite_layout}
+</div>
+
+<div class="card" id="notes">
+<div class="institution">User Notes / Analyst Notes</div>
+<h2>ð Analyst Notes</h2>
+<p class="blue">Write your own notes on assets and keep them attached to your HDI profile.</p>
+{analyst_notes}
+</div>
+
+<div class="card" id="outcomes">
+<div class="institution">Signal Outcome Checker</div>
+<h2>â Signal Outcomes</h2>
+<p class="blue">Track whether saved HDI signals are still pending, successful, or failed.</p>
+<div class="grid">{outcome_checker}</div>
+</div>
+
+<div class="card" id="alert-rules">
+<div class="institution">Watchlist Alert Rules</div>
+<h2>ð£ Custom Alert Rules</h2>
+<p class="blue">Create rules such as âalert me if NVDA score is above 80â.</p>
+{alert_rules}
+</div>
+
+<div class="card" id="premium-control">
+<div class="institution">Premium Access Control</div>
+<h2>ð Access Control</h2>
+<p class="blue">Prepare HDI for free vs premium/institutional access.</p>
+{premium_control}
+</div>
+
+<div class="card" id="teams">
+<div class="institution">Team / Institution Accounts</div>
+<h2>ð¥ Teams & Institutions</h2>
+<p class="blue">Create team accounts for institutions, companies, or analyst groups.</p>
+{team_accounts}
+</div>
+
+<div class="card" id="exports">
+<div class="institution">Data Export CSV/JSON</div>
+<h2>ð¤ Data Export</h2>
+<p class="blue">Export portfolio, signals, behavior, and report data for analysis.</p>
+{data_exports}
+</div>
+
+<div class="card" id="ui-performance">
+<div class="institution">UI Performance Optimization</div>
+<h2>â¡ UI Performance</h2>
+<p class="blue">Cleaner, faster, responsive dashboard structure for mobile and desktop.</p>
+{ui_performance}
 </div>
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
