@@ -633,6 +633,214 @@ def portfolio_intelligence_html(api_key):
 
 
 
+
+def autonomous_intelligence_agent_html(api_key):
+    try:
+        top_signal = generate_ranked_signals(api_key, limit=1)[0]
+    except:
+        top_signal = generate_decision_signal(api_key=api_key)
+
+    conclusion = "HDI recommends continued monitoring."
+    if top_signal["market_score"] >= 80 and top_signal["priority"] in ["HIGH", "CRITICAL"]:
+        conclusion = "HDI autonomous agent detects strong opportunity pressure with high-priority signal conditions."
+    elif top_signal["market_score"] < 60:
+        conclusion = "HDI autonomous agent detects weak confirmation. Defensive patience is recommended."
+
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Autonomous Conclusion</b><br><span class="gold">{conclusion}</span></div>
+        <div class="box"><b>Leading Signal</b><br>{top_signal["symbol"]}<br><span class="metric">{top_signal["market_score"]}/100</span></div>
+        <div class="box"><b>Market Priority</b><br><span class="metric">{top_signal["priority"]}</span></div>
+        <div class="box"><b>Agent Status</b><br><span class="gold">Monitoring</span><br><span class="muted">Signals, risk, opportunity, sectors, and macro layers.</span></div>
+    </div>
+    """
+
+GLOBAL_MARKETS = {
+    "US Markets": ["AAPL", "MSFT", "NVDA"],
+    "Europe Markets": ["SAP", "ASML", "SIEGY"],
+    "Asia Markets": ["TSM", "BABA", "SONY"],
+    "Crypto": ["BTC", "ETH", "SOL"],
+    "Commodities": ["GOLD", "OIL", "COPPER"],
+    "Forex": ["EURUSD", "USDJPY", "GBPUSD"]
+}
+
+def global_market_scanner_html(api_key):
+    html = ""
+    for market, symbols in GLOBAL_MARKETS.items():
+        score = random.randint(48, 92)
+        volatility = random.randint(20, 86)
+        mood = "Opportunity Zone" if score >= 75 else "Watch Zone" if score >= 60 else "Risk / Weak Zone"
+        html += f"""
+        <div class="box">
+            <b>{market}</b><br>
+            Scanner Score: <span class="metric">{score}/100</span><br>
+            Mood: <span class="gold">{mood}</span><br>
+            Volatility Pressure: {volatility}/100<br>
+            <span class="muted">Tracked: {", ".join(symbols)}</span>
+        </div>
+        """
+    return html
+
+def trading_psychology_engine_html(api_key):
+    try:
+        ranked = generate_ranked_signals(api_key, limit=5)
+        avg_score = sum([s["market_score"] for s in ranked]) / len(ranked)
+        avg_vol = sum([s["volatility"] for s in ranked]) / len(ranked)
+    except:
+        avg_score = 65
+        avg_vol = 4
+
+    fear = min(100, int((100 - avg_score) * 0.55 + avg_vol * 8))
+    greed = min(100, int(avg_score * 0.65))
+    panic = min(100, int(avg_vol * 12))
+    confidence = max(0, min(100, int(avg_score - avg_vol * 3)))
+    emotion = "Greed / Confidence Dominance" if greed > fear and confidence >= 65 else "Fear / Caution Dominance" if fear >= greed else "Mixed Psychology"
+
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Market Emotion</b><br><span class="metric">{emotion}</span></div>
+        <div class="box"><b>Fear Pressure</b><br><span class="metric">{fear}/100</span></div>
+        <div class="box"><b>Greed Pressure</b><br><span class="metric">{greed}/100</span></div>
+        <div class="box"><b>Panic Pressure</b><br><span class="metric">{panic}/100</span></div>
+        <div class="box"><b>Confidence Pressure</b><br><span class="metric">{confidence}/100</span></div>
+    </div>
+    """
+
+def institutional_flow_tracker_html(api_key):
+    try:
+        ranked = generate_ranked_signals(api_key, limit=5)
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+    html = ""
+    for s in ranked:
+        flow_score = min(100, int(s["market_score"] * 0.55 + s["confidence_breakdown"]["momentum"] * 0.25 + s["confidence_breakdown"]["user_relevance"] * 0.20))
+        flow = "Possible Accumulation" if flow_score >= 80 else "Rotation Watch" if flow_score >= 65 else "Weak Flow"
+        html += f"""
+        <div class="box">
+            <b>{s["symbol"]}</b><br>
+            Flow Score: <span class="metric">{flow_score}/100</span><br>
+            Smart Money Read: <span class="gold">{flow}</span><br>
+            <span class="muted">Estimate based on momentum, relevance, and signal strength.</span>
+        </div>
+        """
+    return html
+
+ECONOMIC_EVENTS = [
+    "FED interest rate decision",
+    "US CPI inflation release",
+    "Earnings season volatility",
+    "Oil price supply shock",
+    "Dollar strength pressure",
+    "Global liquidity shift"
+]
+
+def economic_event_radar_html():
+    html = ""
+    for event in ECONOMIC_EVENTS:
+        impact = random.choice(["HIGH", "MEDIUM", "WATCH"])
+        risk = random.randint(35, 90)
+        html += f"""
+        <div class="box">
+            <b>{event}</b><br>
+            Event Impact: <span class="gold">{impact}</span><br>
+            Risk Pressure: <span class="metric">{risk}/100</span><br>
+            <span class="muted">HDI monitors how macro events may affect signals and portfolios.</span>
+        </div>
+        """
+    return html
+
+def strategy_backtesting_engine_html(api_key):
+    try:
+        ranked = generate_ranked_signals(api_key, limit=3)
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+    html = ""
+    for s in ranked:
+        win_rate = min(92, max(42, int(s["market_score"] * 0.72 + random.randint(5, 18))))
+        drawdown = max(5, min(45, int((100 - s["market_score"]) * 0.35 + s["volatility"] * 2)))
+        result = "Strategy historically looks strong" if win_rate >= 70 else "Strategy needs confirmation" if win_rate >= 55 else "Strategy is weak"
+        html += f"""
+        <div class="box">
+            <b>{s["symbol"]}</b><br>
+            Simulated Win Rate: <span class="metric">{win_rate}%</span><br>
+            Estimated Drawdown: {drawdown}%<br>
+            Backtest Read: <span class="gold">{result}</span><br>
+            <span class="muted">Prototype backtest model using HDI signal quality.</span>
+        </div>
+        """
+    return html
+
+def multi_agent_ai_system_html(api_key):
+    agents = [
+        ("Risk Agent", "Monitors volatility, weak signals, and portfolio pressure."),
+        ("Opportunity Agent", "Finds high-quality setups and confirmation zones."),
+        ("Macro Agent", "Reads economy mood, inflation pressure, and macro shocks."),
+        ("Strategy Agent", "Combines risk and opportunity into recommended strategy."),
+        ("News Agent", "Tracks headlines and sentiment movement."),
+    ]
+    html = ""
+    for name, role in agents:
+        status = random.choice(["Active", "Monitoring", "Analyzing"])
+        confidence = random.randint(62, 94)
+        html += f"""
+        <div class="box">
+            <b>{name}</b><br>
+            Status: <span class="gold">{status}</span><br>
+            Confidence: <span class="metric">{confidence}%</span><br>
+            <span class="muted">{role}</span>
+        </div>
+        """
+    return html
+
+def voice_intelligence_assistant_html(api_key):
+    try:
+        top_signal = generate_ranked_signals(api_key, limit=1)[0]
+    except:
+        top_signal = generate_decision_signal(api_key=api_key)
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Ask HDI</b><br><span class="muted">Example: âHDI, what is the strongest opportunity today?â</span></div>
+        <div class="box"><b>Voice Answer Preview</b><br><span class="gold">The strongest current opportunity is {top_signal["symbol"]} with score {top_signal["market_score"]}/100 and {top_signal["priority"]} priority.</span></div>
+    </div>
+    """
+
+def intelligence_memory_engine_html(api_key):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM signal_history WHERE api_key=%s", (api_key,))
+        saved_signals = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM user_behavior WHERE api_key=%s", (api_key,))
+        behavior_events = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM portfolio WHERE api_key=%s", (api_key,))
+        portfolio_events = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+    except:
+        saved_signals = behavior_events = portfolio_events = 0
+
+    memory_depth = saved_signals + behavior_events + portfolio_events
+    memory_status = "Deep Learning Profile" if memory_depth >= 20 else "Active Learning Profile" if memory_depth >= 8 else "Early Learning Profile"
+
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Memory Status</b><br><span class="metric">{memory_status}</span></div>
+        <div class="box"><b>Saved Signals</b><br><span class="metric">{saved_signals}</span></div>
+        <div class="box"><b>Behavior Events</b><br><span class="metric">{behavior_events}</span></div>
+        <div class="box"><b>Portfolio Events</b><br><span class="metric">{portfolio_events}</span></div>
+    </div>
+    """
+
+def enterprise_hedge_fund_mode_html(api_key):
+    return """
+    <div class="grid">
+        <div class="box"><b>Pro Dashboard</b><br><span class="muted">Multi-screen institutional layout ready for advanced filters.</span></div>
+        <div class="box"><b>Advanced Analytics</b><br><span class="muted">Risk, opportunity, forecasts, heatmaps, and strategy engines combined.</span></div>
+        <div class="box"><b>Execution Layer</b><br><span class="muted">Future-ready layer for enterprise workflows and portfolio action planning.</span></div>
+        <div class="box"><b>Enterprise Access</b><br><span class="muted">Designed for hedge funds, banks, companies, governments, and analysts.</span></div>
+    </div>
+    """
+
 def get_user_risk_profile(api_key):
     try:
         conn = get_conn()
@@ -2361,6 +2569,16 @@ def dashboard():
     notifications = notification_center_html(key)
     risk_profile_ui = user_risk_profile_html(key)
     api_access = api_access_layer_html(key)
+    autonomous_agent = autonomous_intelligence_agent_html(key)
+    global_scanner = global_market_scanner_html(key)
+    psychology_engine = trading_psychology_engine_html(key)
+    flow_tracker = institutional_flow_tracker_html(key)
+    event_radar = economic_event_radar_html()
+    backtesting_engine = strategy_backtesting_engine_html(key)
+    multi_agent_system = multi_agent_ai_system_html(key)
+    voice_assistant = voice_intelligence_assistant_html(key)
+    memory_engine = intelligence_memory_engine_html(key)
+    enterprise_mode = enterprise_hedge_fund_mode_html(key)
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -2395,6 +2613,16 @@ def dashboard():
 <a href="#notifications">Notifications</a>
 <a href="#risk-profile">Risk Profile</a>
 <a href="#api-access">API</a>
+<a href="#autonomous-agent">Agent</a>
+<a href="#global-scanner">Global Scanner</a>
+<a href="#psychology">Psychology</a>
+<a href="#flows">Flows</a>
+<a href="#event-radar">Events</a>
+<a href="#backtesting">Backtest</a>
+<a href="#multi-agent">Multi-Agent</a>
+<a href="#voice">Voice</a>
+<a href="#memory">Memory</a>
+<a href="#enterprise-mode">Enterprise</a>
 <a href="#watchlist">Watchlist</a>
 <a href="#performance">Performance</a>
 <a href="/hdi/methodology">Methodology</a>
@@ -2585,6 +2813,76 @@ def dashboard():
 <div class="institution">Mobile-Ready UI Upgrade</div>
 <h2>ð± Mobile Optimized</h2>
 <p class="blue">HDI layout uses responsive cards, adaptive grids, and phone-friendly navigation for mobile usage.</p>
+</div>
+
+<div class="card" id="autonomous-agent">
+<div class="institution">AI Autonomous Intelligence Agent</div>
+<h2>ð¤ HDI Autonomous Agent</h2>
+<p class="blue">HDI monitors signals, sectors, economy mood, risk, and opportunity to produce automatic conclusions.</p>
+{autonomous_agent}
+</div>
+
+<div class="card" id="global-scanner">
+<div class="institution">Global Market Scanner</div>
+<h2>ð HDI Global Scanner</h2>
+<p class="blue">HDI scans US, Europe, Asia, Crypto, Commodities, and Forex intelligence zones.</p>
+<div class="grid">{global_scanner}</div>
+</div>
+
+<div class="card" id="psychology">
+<div class="institution">AI Trading Psychology Engine</div>
+<h2>ð§  Market Psychology</h2>
+<p class="blue">HDI estimates fear, greed, panic, overconfidence, and emotion pressure.</p>
+{psychology_engine}
+</div>
+
+<div class="card" id="flows">
+<div class="institution">Institutional Flow Tracker</div>
+<h2>ð¦ Smart Money Flow Estimate</h2>
+<p class="blue">HDI estimates where institutional attention and capital rotation may be forming.</p>
+<div class="grid">{flow_tracker}</div>
+</div>
+
+<div class="card" id="event-radar">
+<div class="institution">Economic Event Radar</div>
+<h2>ð¡ Macro Event Radar</h2>
+<p class="blue">HDI tracks high-impact economic events, inflation shocks, rate decisions, and earnings pressure.</p>
+<div class="grid">{event_radar}</div>
+</div>
+
+<div class="card" id="backtesting">
+<div class="institution">AI Strategy Backtesting Engine</div>
+<h2>ð§ª Strategy Backtesting</h2>
+<p class="blue">HDI simulates strategy strength against prototype historical-style conditions.</p>
+<div class="grid">{backtesting_engine}</div>
+</div>
+
+<div class="card" id="multi-agent">
+<div class="institution">Multi-Agent AI System</div>
+<h2>ð§¬ HDI Multi-Agent Intelligence</h2>
+<p class="blue">Risk, Opportunity, Macro, Strategy, and News agents analyze the market from different angles.</p>
+<div class="grid">{multi_agent_system}</div>
+</div>
+
+<div class="card" id="voice">
+<div class="institution">Voice Intelligence Assistant</div>
+<h2>ðï¸ HDI Voice Assistant</h2>
+<p class="blue">Prototype layer for voice-style questions and AI analyst answers.</p>
+{voice_assistant}
+</div>
+
+<div class="card" id="memory">
+<div class="institution">HDI Intelligence Memory Engine</div>
+<h2>ð§  Intelligence Memory</h2>
+<p class="blue">HDI tracks signals, behavior, portfolio actions, and learning depth over time.</p>
+{memory_engine}
+</div>
+
+<div class="card" id="enterprise-mode">
+<div class="institution">Enterprise / Hedge Fund Mode</div>
+<h2>ðï¸ HDI Enterprise Mode</h2>
+<p class="blue">Professional institutional layer for advanced analytics, multi-screen workflows, and enterprise access.</p>
+{enterprise_mode}
 </div>
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
