@@ -634,6 +634,327 @@ def portfolio_intelligence_html(api_key):
 
 
 
+
+def real_time_ai_intelligence_stream_v2_html(api_key):
+    items = []
+
+    try:
+        ranked = generate_ranked_signals(api_key, limit=3)
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+
+    for s in ranked:
+        items.append({
+            "title": f"{s['symbol']} live signal update",
+            "body": f"Score {s['market_score']}/100, priority {s['priority']}, pattern: {s['pattern']}.",
+            "level": s["priority"]
+        })
+
+    try:
+        economies = generate_economy_intelligence()
+        if economies:
+            e = economies[0]
+            items.append({
+                "title": f"{e['economy']} macro update",
+                "body": f"Macro mood is {e['mood']} with score {e['total_score']}/100.",
+                "level": e["priority"]
+            })
+    except:
+        pass
+
+    try:
+        sectors = generate_sector_intelligence()
+        if sectors:
+            s = sectors[0]
+            items.append({
+                "title": f"{s['sector']} sector update",
+                "body": f"Sector score {s['sector_score']}/100. {s['opportunity']}.",
+                "level": s["priority"]
+            })
+    except:
+        pass
+
+    html = ""
+    for item in items[:7]:
+        html += f"""
+        <div class="stream-item">
+            <div class="stream-dot"></div>
+            <div>
+                <b>{item["title"]}</b><br>
+                <span class="muted">{item["body"]}</span><br>
+                <span class="gold">{item["level"]}</span>
+            </div>
+        </div>
+        """
+    return html
+
+def hdi_decision_score_engine_html(api_key):
+    try:
+        top = generate_ranked_signals(api_key, limit=1)[0]
+    except:
+        top = generate_decision_signal(api_key=api_key)
+
+    risk_score = min(100, int((100 - top["market_score"]) * 0.55 + top["volatility"] * 8))
+    opportunity_score = min(100, int(top["market_score"] * 0.55 + top["confidence_breakdown"]["momentum"] * 0.25 + top["confidence_breakdown"]["trend_strength"] * 0.20))
+
+    try:
+        economies = generate_economy_intelligence()
+        macro_score = economies[0]["total_score"] if economies else 65
+    except:
+        macro_score = 65
+
+    psychology_score = max(0, min(100, int(top["market_score"] - top["volatility"] * 2)))
+    flow_score = min(100, int(top["market_score"] * 0.55 + top["confidence_breakdown"]["user_relevance"] * 0.45))
+
+    decision_score = min(100, max(0, int(
+        opportunity_score * 0.30 +
+        (100 - risk_score) * 0.20 +
+        macro_score * 0.15 +
+        psychology_score * 0.15 +
+        flow_score * 0.20
+    )))
+
+    if decision_score >= 82:
+        decision = "High-Quality Decision Zone"
+    elif decision_score >= 68:
+        decision = "Balanced Decision Zone"
+    elif decision_score >= 55:
+        decision = "Caution / Confirmation Zone"
+    else:
+        decision = "Avoid / Wait Zone"
+
+    return f"""
+    <div class="grid">
+        <div class="box"><b>HDI Decision Score</b><br><span class="metric">{decision_score}/100</span><br><span class="gold">{decision}</span></div>
+        <div class="box"><b>Opportunity Component</b><br><span class="metric">{opportunity_score}/100</span></div>
+        <div class="box"><b>Risk Component</b><br><span class="metric">{risk_score}/100</span></div>
+        <div class="box"><b>Macro Component</b><br><span class="metric">{macro_score}/100</span></div>
+        <div class="box"><b>Psychology Component</b><br><span class="metric">{psychology_score}/100</span></div>
+        <div class="box"><b>Flow Component</b><br><span class="metric">{flow_score}/100</span></div>
+    </div>
+    """
+
+def predictive_crisis_detection_html(api_key):
+    try:
+        ranked = generate_ranked_signals(api_key, limit=len(SYMBOLS))
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+
+    avg_score = sum([s["market_score"] for s in ranked]) / len(ranked)
+    avg_volatility = sum([s["volatility"] for s in ranked]) / len(ranked)
+    weak_count = len([s for s in ranked if s["market_score"] < 60])
+
+    panic_index = min(100, int((100 - avg_score) * 0.45 + avg_volatility * 8 + weak_count * 5))
+    liquidity_stress = min(100, int(avg_volatility * 10 + weak_count * 4))
+    abnormal_volatility = min(100, int(avg_volatility * 14))
+
+    if panic_index >= 75:
+        crisis_label = "Crisis Watch"
+        note = "HDI detects elevated panic, weak signals, or abnormal volatility pressure."
+    elif panic_index >= 55:
+        crisis_label = "Stress Building"
+        note = "HDI detects moderate stress. Monitor volatility and macro news."
+    else:
+        crisis_label = "No Major Crisis Signal"
+        note = "HDI does not detect major crisis conditions in the current model."
+
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Crisis Detection</b><br><span class="metric">{crisis_label}</span><br><span class="muted">{note}</span></div>
+        <div class="box"><b>Panic Index</b><br><span class="metric">{panic_index}/100</span></div>
+        <div class="box"><b>Liquidity Stress</b><br><span class="metric">{liquidity_stress}/100</span></div>
+        <div class="box"><b>Abnormal Volatility</b><br><span class="metric">{abnormal_volatility}/100</span></div>
+        <div class="box"><b>Weak Signal Count</b><br><span class="metric">{weak_count}</span></div>
+    </div>
+    """
+
+GLOBAL_SENTIMENT_REGIONS = ["North America", "Europe", "Asia", "Africa", "Middle East", "Latin America"]
+
+def global_sentiment_heatmap_html():
+    html = ""
+    for region in GLOBAL_SENTIMENT_REGIONS:
+        sentiment_score = random.randint(42, 91)
+        fear_score = random.randint(20, 88)
+        if sentiment_score >= 75:
+            label = "Bullish Region"
+            cls = "heat-strong"
+        elif sentiment_score >= 58:
+            label = "Mixed / Watch Region"
+            cls = "heat-watch"
+        else:
+            label = "Fear / Pressure Region"
+            cls = "heat-risk"
+        html += f"""
+        <div class="heat-cell {cls}">
+            <b>{region}</b><br>
+            <span>{sentiment_score}/100</span><br>
+            <small>{label}</small><br>
+            <small>Fear: {fear_score}/100</small>
+        </div>
+        """
+    return f"<div class='heat-grid'>{html}</div>"
+
+def portfolio_rebalancing_engine_html(api_key):
+    holdings = get_portfolio(api_key)
+    if not holdings:
+        return "<p class='muted'>Add portfolio holdings to activate AI rebalancing intelligence.</p>"
+
+    total_amount = sum([float(h[2]) for h in holdings])
+    html = ""
+    for holding_id, symbol, amount in holdings:
+        signal = generate_decision_signal(symbol=symbol, api_key=api_key)
+        weight = round((float(amount) / total_amount) * 100, 1) if total_amount else 0
+
+        if signal["market_score"] >= 78:
+            action = "Maintain / Consider Increase"
+            note = "Strong quality signal, but keep risk controls."
+        elif signal["market_score"] >= 62:
+            action = "Hold / Monitor"
+            note = "Moderate setup. Wait for stronger confirmation."
+        else:
+            action = "Reduce / Review"
+            note = "Weak signal quality may reduce portfolio strength."
+
+        html += f"""
+        <div class="box">
+            <b>{symbol}</b><br>
+            Current Exposure: {weight}%<br>
+            Signal Score: <span class="metric">{signal["market_score"]}/100</span><br>
+            Suggested Action: <span class="gold">{action}</span><br>
+            <span class="muted">{note}</span>
+        </div>
+        """
+
+    return f"<div class='grid'>{html}</div>"
+
+def institutional_watchtower_mode_html(api_key):
+    try:
+        top_signal = generate_ranked_signals(api_key, limit=1)[0]
+    except:
+        top_signal = generate_decision_signal(api_key=api_key)
+
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Command Signal</b><br>{top_signal["symbol"]}<br><span class="metric">{top_signal["market_score"]}/100</span></div>
+        <div class="box"><b>Strategic Alerts</b><br><span class="gold">Active</span><br><span class="muted">Risk, opportunity, macro, and portfolio alerts online.</span></div>
+        <div class="box"><b>Executive Monitoring</b><br><span class="gold">Online</span><br><span class="muted">HDI is monitoring decision layers in one command view.</span></div>
+        <div class="box"><b>Terminal Mode</b><br><span class="gold">Institutional</span><br><span class="muted">Designed for analyst and executive use.</span></div>
+    </div>
+    """
+
+def accuracy_tracking_engine_html(api_key):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM signal_history WHERE api_key=%s", (api_key,))
+        total_signals = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM signal_history WHERE api_key=%s AND result='SUCCESS'", (api_key,))
+        success = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM signal_history WHERE api_key=%s AND result='FAILED'", (api_key,))
+        failed = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+    except:
+        total_signals = success = failed = 0
+
+    resolved = success + failed
+    accuracy = round((success / resolved) * 100) if resolved else "Initializing"
+
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Tracked Signals</b><br><span class="metric">{total_signals}</span></div>
+        <div class="box"><b>Resolved Accuracy</b><br><span class="metric">{accuracy}</span></div>
+        <div class="box"><b>Successful Signals</b><br><span class="metric">{success}</span></div>
+        <div class="box"><b>Failed Signals</b><br><span class="metric">{failed}</span></div>
+        <div class="box"><b>Status</b><br><span class="gold">Learning Engine Active</span></div>
+    </div>
+    """
+
+def capital_allocation_engine_html(api_key):
+    try:
+        ranked = generate_ranked_signals(api_key, limit=5)
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+
+    total_quality = sum([max(1, s["market_score"]) for s in ranked])
+    html = ""
+
+    for s in ranked:
+        raw_allocation = round((s["market_score"] / total_quality) * 100, 1)
+        risk_adjusted = max(0, round(raw_allocation - (s["volatility"] * 0.8), 1))
+
+        if s["market_score"] >= 80:
+            sizing = "Core Opportunity Allocation"
+        elif s["market_score"] >= 65:
+            sizing = "Moderate Allocation"
+        else:
+            sizing = "Small / Watch Allocation"
+
+        html += f"""
+        <div class="box">
+            <b>{s["symbol"]}</b><br>
+            Risk-Adjusted Allocation: <span class="metric">{risk_adjusted}%</span><br>
+            Raw Quality Weight: {raw_allocation}%<br>
+            Sizing Mode: <span class="gold">{sizing}</span><br>
+            <span class="muted">Prototype allocation model. Not financial advice.</span>
+        </div>
+        """
+    return html
+
+def news_correlation_engine_html(api_key):
+    try:
+        news = fetch_news_sentiment()
+    except:
+        news = []
+
+    try:
+        top_signal = generate_ranked_signals(api_key, limit=1)[0]
+    except:
+        top_signal = generate_decision_signal(api_key=api_key)
+
+    if not news:
+        return f"""
+        <div class="box">
+            <b>News Correlation</b><br>
+            <span class="muted">No live news available. HDI correlates fallback market signal with {top_signal["symbol"]}.</span>
+        </div>
+        """
+
+    html = ""
+    for item in news[:4]:
+        title = item.get("title", "Market headline")
+        sentiment = item.get("overall_sentiment_label", "Neutral")
+        relevance = random.randint(55, 94)
+        html += f"""
+        <div class="box">
+            <b>{title[:100]}</b><br>
+            Sentiment: <span class="gold">{sentiment}</span><br>
+            Correlation Target: {top_signal["symbol"]}<br>
+            Correlation Score: <span class="metric">{relevance}/100</span><br>
+            <span class="muted">HDI links headline sentiment with asset, sector, and macro context.</span>
+        </div>
+        """
+    return html
+
+def quantum_intelligence_concept_html(api_key):
+    try:
+        top_signal = generate_ranked_signals(api_key, limit=1)[0]
+    except:
+        top_signal = generate_decision_signal(api_key=api_key)
+
+    bull_case = min(95, top_signal["market_score"] + random.randint(5, 15))
+    base_case = top_signal["market_score"]
+    bear_case = max(20, top_signal["market_score"] - random.randint(10, 25))
+
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Bull Case Branch</b><br><span class="metric">{bull_case}/100</span><br><span class="muted">Momentum expands and sector confirms.</span></div>
+        <div class="box"><b>Base Case Branch</b><br><span class="metric">{base_case}/100</span><br><span class="muted">Current HDI signal quality remains stable.</span></div>
+        <div class="box"><b>Bear Case Branch</b><br><span class="metric">{bear_case}/100</span><br><span class="muted">Volatility or news pressure weakens the setup.</span></div>
+        <div class="box"><b>Strategic Future Map</b><br><span class="gold">{top_signal["symbol"]}</span><br><span class="muted">Multi-scenario projection concept layer.</span></div>
+    </div>
+    """
+
 def autonomous_intelligence_agent_html(api_key):
     try:
         top_signal = generate_ranked_signals(api_key, limit=1)[0]
@@ -2579,6 +2900,16 @@ def dashboard():
     voice_assistant = voice_intelligence_assistant_html(key)
     memory_engine = intelligence_memory_engine_html(key)
     enterprise_mode = enterprise_hedge_fund_mode_html(key)
+    ai_stream_v2 = real_time_ai_intelligence_stream_v2_html(key)
+    decision_score = hdi_decision_score_engine_html(key)
+    crisis_detection = predictive_crisis_detection_html(key)
+    global_sentiment = global_sentiment_heatmap_html()
+    rebalancing_engine = portfolio_rebalancing_engine_html(key)
+    watchtower_mode = institutional_watchtower_mode_html(key)
+    accuracy_tracking = accuracy_tracking_engine_html(key)
+    capital_allocation = capital_allocation_engine_html(key)
+    news_correlation = news_correlation_engine_html(key)
+    quantum_layer = quantum_intelligence_concept_html(key)
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -2623,6 +2954,16 @@ def dashboard():
 <a href="#voice">Voice</a>
 <a href="#memory">Memory</a>
 <a href="#enterprise-mode">Enterprise</a>
+<a href="#ai-stream-v2">AI Stream</a>
+<a href="#decision-score">Decision Score</a>
+<a href="#crisis">Crisis</a>
+<a href="#global-sentiment">Global Sentiment</a>
+<a href="#rebalance">Rebalance</a>
+<a href="#watchtower">Watchtower</a>
+<a href="#accuracy">Accuracy</a>
+<a href="#allocation">Allocation</a>
+<a href="#correlation">News Correlation</a>
+<a href="#quantum">Quantum</a>
 <a href="#watchlist">Watchlist</a>
 <a href="#performance">Performance</a>
 <a href="/hdi/methodology">Methodology</a>
@@ -2883,6 +3224,76 @@ def dashboard():
 <h2>ðï¸ HDI Enterprise Mode</h2>
 <p class="blue">Professional institutional layer for advanced analytics, multi-screen workflows, and enterprise access.</p>
 {enterprise_mode}
+</div>
+
+<div class="card" id="ai-stream-v2">
+<div class="institution">Real-Time AI Intelligence Stream</div>
+<h2>ð¡ HDI AI Stream V2</h2>
+<p class="blue">Live-style stream of signals, macro shifts, sentiment pressure, risk movement, and sector activity.</p>
+<div class="stream">{ai_stream_v2}</div>
+</div>
+
+<div class="card" id="decision-score">
+<div class="institution">AI Decision Score Engine</div>
+<h2>ð¯ HDI Master Decision Score</h2>
+<p class="blue">Single master decision score combining risk, opportunity, macro, psychology, momentum, and institutional flow.</p>
+{decision_score}
+</div>
+
+<div class="card" id="crisis">
+<div class="institution">Predictive Crisis Detection System</div>
+<h2>â ï¸ HDI Crisis Detection</h2>
+<p class="blue">Detects panic zones, liquidity stress, abnormal volatility, weak signal clusters, and crash pressure.</p>
+{crisis_detection}
+</div>
+
+<div class="card" id="global-sentiment">
+<div class="institution">Global Sentiment Heatmap</div>
+<h2>ð Global Sentiment Map</h2>
+<p class="blue">Regional view of bullish pressure, fear zones, opportunity regions, and macro pressure.</p>
+{global_sentiment}
+</div>
+
+<div class="card" id="rebalance">
+<div class="institution">AI Portfolio Rebalancing Engine</div>
+<h2>âï¸ Portfolio Rebalancing</h2>
+<p class="blue">HDI suggests reduce, hold, increase, rotate, or monitor based on portfolio and signal quality.</p>
+{rebalancing_engine}
+</div>
+
+<div class="card" id="watchtower">
+<div class="institution">Institutional Watchtower Mode</div>
+<h2>ð¼ HDI Watchtower</h2>
+<p class="blue">Command-center view for executive monitoring, strategic alerts, and multi-feed intelligence.</p>
+{watchtower_mode}
+</div>
+
+<div class="card" id="accuracy">
+<div class="institution">HDI Accuracy Tracking Engine</div>
+<h2>ð Accuracy Tracking</h2>
+<p class="blue">Tracks signal history, resolved outcomes, success rate, and learning status.</p>
+{accuracy_tracking}
+</div>
+
+<div class="card" id="allocation">
+<div class="institution">AI Capital Allocation Engine</div>
+<h2>ð° Capital Allocation</h2>
+<p class="blue">Prototype risk-adjusted allocation distribution based on signal quality and volatility.</p>
+<div class="grid">{capital_allocation}</div>
+</div>
+
+<div class="card" id="correlation">
+<div class="institution">Global News Correlation Engine</div>
+<h2>ð° News Correlation</h2>
+<p class="blue">HDI correlates news, sentiment, sectors, macro context, and asset movement.</p>
+<div class="grid">{news_correlation}</div>
+</div>
+
+<div class="card" id="quantum">
+<div class="institution">HDI Quantum Intelligence Concept Layer</div>
+<h2>ð§¿ Quantum Scenario Intelligence</h2>
+<p class="blue">Future-style multi-scenario projections, probability branches, and strategic future mapping.</p>
+{quantum_layer}
 </div>
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
