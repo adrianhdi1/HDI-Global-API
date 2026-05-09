@@ -1298,6 +1298,120 @@ def engine_summary_card(title, body, url):
     """
 
 
+
+def frontend_backend_separation_html():
+    return """
+    <div class="grid">
+        <div class="box"><b>Backend API</b><br><span class="gold">Flask Ready</span><br><span class="muted">Flask can remain as HDI API layer.</span></div>
+        <div class="box"><b>Frontend</b><br><span class="gold">React / Next.js Ready</span><br><span class="muted">Future UI can consume JSON endpoints from Flask.</span></div>
+        <div class="box"><b>API Contract</b><br><span class="gold">Prepared</span><br><span class="muted">Existing /hdi/* endpoints become backend contract.</span></div>
+        <div class="box"><b>Migration Path</b><br><span class="muted">Keep Flask dashboard now, build React dashboard later.</span></div>
+    </div>
+    """
+
+def professional_migrations_html():
+    return """
+    <div class="grid">
+        <div class="box"><b>Current DB Mode</b><br><span class="metric">CREATE TABLE</span><br><span class="muted">Works for prototype and early beta.</span></div>
+        <div class="box"><b>Migration Target</b><br><span class="gold">Alembic / Flask-Migrate</span></div>
+        <div class="box"><b>Migration Benefit</b><br><span class="muted">Avoid duplicate columns, protect data, track DB versions.</span></div>
+        <div class="box"><b>Status</b><br><span class="gold">Roadmap Ready</span></div>
+    </div>
+    """
+
+def background_workers_html():
+    workers = [
+        ("Signal Checker Worker", "Checks saved signal outcomes."),
+        ("Alert Worker", "Processes rule-based alerts."),
+        ("Report Worker", "Generates heavy reports outside request cycle."),
+        ("News Worker", "Refreshes sentiment and headlines."),
+        ("Portfolio Worker", "Recalculates exposure and risk.")
+    ]
+    html = ""
+    for name, role in workers:
+        html += f"<div class='box'><b>{name}</b><br><span class='gold'>Prepared</span><br><span class='muted'>{role}</span></div>"
+    return html
+
+def queue_system_html():
+    return """
+    <div class="grid">
+        <div class="box"><b>Queue Target</b><br><span class="metric">Celery / RQ</span></div>
+        <div class="box"><b>Broker</b><br><span class="gold">Redis</span><br><span class="muted">Use REDIS_URL when ready.</span></div>
+        <div class="box"><b>Heavy Jobs</b><br><span class="muted">Reports, signal checks, alerts, data imports.</span></div>
+        <div class="box"><b>Status</b><br><span class="gold">Architecture Prepared</span></div>
+    </div>
+    """
+
+def real_user_sessions_html():
+    return """
+    <div class="grid">
+        <div class="box"><b>Current Access</b><br><span class="metric">API Key Login</span></div>
+        <div class="box"><b>Session Target</b><br><span class="gold">Secure Cookies</span></div>
+        <div class="box"><b>Security</b><br><span class="muted">HttpOnly cookies, expiry, token rotation.</span></div>
+        <div class="box"><b>Status</b><br><span class="gold">Prepared</span></div>
+    </div>
+    """
+
+def audit_logs_html(api_key):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""CREATE TABLE IF NOT EXISTS audit_logs (
+            id SERIAL PRIMARY KEY,
+            api_key TEXT,
+            action TEXT,
+            metadata TEXT,
+            created_at TEXT
+        )""")
+        cur.execute("SELECT action,metadata,created_at FROM audit_logs WHERE api_key=%s ORDER BY id DESC LIMIT 8", (api_key,))
+        rows = cur.fetchall()
+        conn.commit()
+        cur.close()
+        conn.close()
+    except:
+        rows = []
+    html = ""
+    for action, metadata, created_at in rows:
+        html += f"<div class='box'><b>{action}</b><br><span class='muted'>{metadata}</span><br><small>{created_at}</small></div>"
+    if not html:
+        html = "<p class='muted'>No audit logs yet.</p>"
+    return f"<div class='grid'><div class='box'><b>Audit Status</b><br><span class='gold'>Prepared</span></div>{html}</div>"
+
+def error_monitoring_html():
+    return """
+    <div class="grid">
+        <div class="box"><b>Error Collection</b><br><span class="gold">Prepared</span></div>
+        <div class="box"><b>Future Tool</b><br><span class="metric">Sentry</span></div>
+        <div class="box"><b>Current Logging</b><br><span class="muted">Render/Railway logs + Flask error handlers.</span></div>
+        <div class="box"><b>Status</b><br><span class="gold">Monitoring Ready</span></div>
+    </div>
+    """
+
+def testing_suite_html():
+    tests = ["Route tests", "Database tests", "Signal engine tests", "Auth tests", "Admin tests", "Portfolio tests"]
+    return "".join([f"<div class='box'><b>{t}</b><br><span class='gold'>Planned</span><br><span class='muted'>pytest-ready roadmap.</span></div>" for t in tests])
+
+def cicd_pipeline_html():
+    return """
+    <div class="grid">
+        <div class="box"><b>CI Target</b><br><span class="metric">GitHub Actions</span></div>
+        <div class="box"><b>Pipeline</b><br><span class="muted">Install â test â security check â deploy.</span></div>
+        <div class="box"><b>Auto Deploy</b><br><span class="gold">Render/Railway Ready</span></div>
+        <div class="box"><b>Status</b><br><span class="gold">Blueprint Ready</span></div>
+    </div>
+    """
+
+def investor_demo_mode_html():
+    demo_signal = generate_decision_signal(symbol="NVDA", api_key=None)
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Demo Account</b><br><span class="metric">HDI-DEMO</span></div>
+        <div class="box"><b>Demo Signal</b><br>{demo_signal["symbol"]}<br><span class="metric">{demo_signal["market_score"]}/100</span></div>
+        <div class="box"><b>Demo Purpose</b><br><span class="muted">Pitch investors and institutions without exposing real user data.</span></div>
+        <div class="box"><b>Status</b><br><span class="gold">Ready</span><br><a class="btn" href="/hdi/demo">Open Demo Mode</a></div>
+    </div>
+    """
+
 def microservice_architecture_html():
     services = [
         ("Signals Service", "Generates scores, rankings, predictions, and signal history."),
@@ -3410,6 +3524,16 @@ def dashboard():
     api_keys_management = institutional_api_keys_management_html(key)
     backup_system = disaster_recovery_backup_html()
     scaling_infra = deployment_scaling_infrastructure_html()
+    frontend_backend = frontend_backend_separation_html()
+    migrations = professional_migrations_html()
+    background_workers = background_workers_html()
+    queue_system = queue_system_html()
+    user_sessions = real_user_sessions_html()
+    audit_logs_ui = audit_logs_html(key)
+    error_monitoring = error_monitoring_html()
+    testing_suite = testing_suite_html()
+    cicd_pipeline = cicd_pipeline_html()
+    investor_demo = investor_demo_mode_html()
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -3484,6 +3608,16 @@ def dashboard():
 <a href="#api-keys">API Keys</a>
 <a href="#backup">Backup</a>
 <a href="#scaling">Scaling</a>
+<a href="#frontend-backend">Frontend</a>
+<a href="#migrations">Migrations</a>
+<a href="#workers">Workers</a>
+<a href="#queue">Queue</a>
+<a href="#sessions">Sessions</a>
+<a href="#audit">Audit</a>
+<a href="#errors">Errors</a>
+<a href="#tests">Tests</a>
+<a href="#cicd">CI/CD</a>
+<a href="#demo-mode">Demo</a>
 <a href="#watchlist">Watchlist</a>
 <a href="#performance">Performance</a>
 <a href="/hdi/methodology">Methodology</a>
@@ -3976,6 +4110,76 @@ def dashboard():
 <h2>ð Scaling Infrastructure</h2>
 <p class="blue">Prepared for Docker, Gunicorn, Nginx, Render/Railway scaling, and cloud architecture.</p>
 {scaling_infra}
+</div>
+
+<div class="card" id="frontend-backend">
+<div class="institution">Separate Frontend / Backend</div>
+<h2>ð§© Flask API + React Ready</h2>
+<p class="blue">HDI is prepared to keep Flask as backend API and move UI to React/Next.js later.</p>
+{frontend_backend}
+</div>
+
+<div class="card" id="migrations">
+<div class="institution">Professional Database Migrations</div>
+<h2>ðï¸ Migration Roadmap</h2>
+<p class="blue">Prepare HDI for Alembic/Flask-Migrate.</p>
+{migrations}
+</div>
+
+<div class="card" id="workers">
+<div class="institution">Background Workers</div>
+<h2>âï¸ Worker Architecture</h2>
+<p class="blue">Signal checks, alerts, reports, news refresh, and portfolio calculations can run outside requests.</p>
+<div class="grid">{background_workers}</div>
+</div>
+
+<div class="card" id="queue">
+<div class="institution">Queue System</div>
+<h2>ð¥ Celery / Redis Queue</h2>
+<p class="blue">Prepared for heavy jobs and background intelligence workflows.</p>
+{queue_system}
+</div>
+
+<div class="card" id="sessions">
+<div class="institution">Real User Sessions</div>
+<h2>ð Secure Sessions</h2>
+<p class="blue">Move from API-key dashboard access to secure cookie sessions.</p>
+{user_sessions}
+</div>
+
+<div class="card" id="audit">
+<div class="institution">Audit Logs</div>
+<h2>ð§¾ Audit Trail</h2>
+<p class="blue">Track admin and user actions.</p>
+{audit_logs_ui}
+</div>
+
+<div class="card" id="errors">
+<div class="institution">Error Monitoring</div>
+<h2>ð ï¸ Error Monitoring</h2>
+<p class="blue">Prepare crash, DB error, API failure, and slow-route monitoring.</p>
+{error_monitoring}
+</div>
+
+<div class="card" id="tests">
+<div class="institution">Testing Suite</div>
+<h2>ð§ª Testing Roadmap</h2>
+<p class="blue">Prepare route, DB, auth, signal, admin, and portfolio tests.</p>
+<div class="grid">{testing_suite}</div>
+</div>
+
+<div class="card" id="cicd">
+<div class="institution">CI/CD Pipeline</div>
+<h2>ð¦ CI/CD Readiness</h2>
+<p class="blue">Prepare auto test + deploy workflow after every push.</p>
+{cicd_pipeline}
+</div>
+
+<div class="card" id="demo-mode">
+<div class="institution">Investor Demo Mode</div>
+<h2>ð¬ Investor Demo</h2>
+<p class="blue">Clean demo experience with impressive sample intelligence and no real user data exposure.</p>
+{investor_demo}
 </div>
 
 <div class="card" id="watchlist">
@@ -4960,6 +5164,76 @@ def admin():
         "behavior_events": behavior_events,
         "signals_saved": signals_saved
     })
+
+
+@app.route("/hdi/demo")
+def investor_demo_page():
+    demo_key = "HDI-DEMO"
+    demo_signal = generate_decision_signal(symbol="NVDA", api_key=None)
+    return f"""
+<html>
+<head><title>HDI Investor Demo</title>{base_style()}</head>
+<body><div class="container">
+<div class="card">
+<div class="institution">Investor Demo Mode</div>
+<h1>HDI Demo Intelligence Terminal</h1>
+<p class="blue">A clean demo view for investors, institutions, banks, and strategic partners.</p>
+<div class="grid">
+<div class="box"><b>Demo Signal</b><br>{demo_signal["symbol"]}<br><span class="metric">{demo_signal["market_score"]}/100</span></div>
+<div class="box"><b>Decision Layer</b><br><span class="gold">{demo_signal["priority"]}</span><br><span class="muted">{demo_signal["recommendation"]}</span></div>
+<div class="box"><b>Platform Readiness</b><br><span class="metric">Institutional</span></div>
+<div class="box"><b>Demo Key</b><br><span class="muted">{demo_key}</span></div>
+</div>
+<a class="btn" href="/">Create Access</a>
+</div></div></body></html>
+"""
+
+@app.route("/hdi/audit-log", methods=["POST"])
+def audit_log_api():
+    data = request.get_json() or {}
+    key = data.get("key")
+    action = data.get("action", "unknown_action")
+    metadata = data.get("metadata", "")
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""CREATE TABLE IF NOT EXISTS audit_logs (
+            id SERIAL PRIMARY KEY,
+            api_key TEXT,
+            action TEXT,
+            metadata TEXT,
+            created_at TEXT
+        )""")
+        cur.execute("INSERT INTO audit_logs(api_key,action,metadata,created_at) VALUES(%s,%s,%s,%s)", (key, action, str(metadata), datetime.utcnow().isoformat()))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except:
+        pass
+    return jsonify({"status": "logged"})
+
+@app.route("/hdi/system-readiness")
+def system_readiness_api():
+    return jsonify({
+        "frontend_backend": "prepared",
+        "migrations": "roadmap ready",
+        "background_workers": "prepared",
+        "queue_system": "redis/celery ready",
+        "sessions": "planned secure cookies",
+        "audit_logs": "prepared",
+        "error_monitoring": "prepared",
+        "testing_suite": "pytest roadmap",
+        "cicd": "github actions ready",
+        "investor_demo": "/hdi/demo"
+    })
+
+@app.route("/hdi/test-plan")
+def test_plan_api():
+    return jsonify({"tests": ["routes", "database", "signals", "auth", "admin", "portfolio", "exports"], "tool": "pytest", "status": "planned"})
+
+@app.route("/hdi/cicd-plan")
+def cicd_plan_api():
+    return jsonify({"pipeline": ["install dependencies", "run tests", "validate security", "deploy"], "tool": "GitHub Actions", "status": "prepared"})
 
 @app.route("/hdi/pay")
 def pay():
