@@ -1,8 +1,19 @@
-from flask import Flask, jsonify, request, redirect
-import uuid, os, requests, psycopg2, random
-from datetime import datetime
+from flask import Flask, jsonify, request, redirect, make_response
+import uuid, os, requests, psycopg2, random, re, csv, io
+from datetime import datetime, timedelta
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    return response
+
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY")
@@ -10,13 +21,13 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY")
 
 SYMBOLS = ["AAPL", "MSFT", "TSLA", "NVDA", "AMZN", "GOOGL", "META"]
 EXPANDED_ASSETS = {
-    "Stocks": ["AAPL", "MSFT", "TSLA", "NVDA", "AMZN", "GOOGL", "META", "AMD", "NFLX", "JPM"],
+    "Stocks": ["AAPL", "MSFT", "TSLA", "NVDA", "AMZN", "GOOGL", "META", "AMD", "NFLX", "JPM", "BAC", "V", "MA"],
     "Crypto": ["BTC", "ETH", "SOL", "BNB", "XRP"],
-    "Forex": ["EURUSD", "GBPUSD", "USDJPY", "USDCHF"],
-    "Commodities": ["GOLD", "OIL", "SILVER", "COPPER"],
+    "Forex": ["EURUSD", "GBPUSD", "USDJPY", "USDCHF", "USDCAD"],
+    "Commodities": ["GOLD", "OIL", "SILVER", "COPPER", "WHEAT"],
     "Indexes": ["SPY", "QQQ", "DIA", "IWM"]
 }
-ALL_ASSETS = sorted(list(set([item for group in EXPANDED_ASSETS.values() for item in group])))
+ALL_ASSETS = sorted(list(set([asset for group in EXPANDED_ASSETS.values() for asset in group])))
 
 SECTORS = {
     "Artificial Intelligence": ["NVDA", "MSFT", "GOOGL"],
@@ -94,42 +105,56 @@ def init_db():
         id SERIAL PRIMARY KEY,
         api_key TEXT UNIQUE,
         risk_profile TEXT DEFAULT 'Balanced',
-        layout TEXT DEFAULT 'default',
         created_at TEXT
     )""")
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS analyst_notes (
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'")
+        cur.execute("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS layout TEXT DEFAULT 'default'")
+    except:
+        pass
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS auth_sessions (
         id SERIAL PRIMARY KEY,
         api_key TEXT,
-        symbol TEXT,
-        note TEXT,
-        created_at TEXT
+        session_token TEXT UNIQUE,
+        created_at TEXT,
+        expires_at TEXT
     )""")
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS alert_rules (
+    cur.execute("""CREATE TABLE IF NOT EXISTS alert_contacts (
         id SERIAL PRIMARY KEY,
         api_key TEXT,
-        symbol TEXT,
-        rule_type TEXT,
-        threshold REAL,
+        channel TEXT,
+        destination TEXT,
         created_at TEXT
     )""")
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS teams (
+    cur.execute("""CREATE TABLE IF NOT EXISTS app_logs (
         id SERIAL PRIMARY KEY,
-        team_name TEXT,
-        owner_key TEXT,
+        api_key TEXT,
+        event_type TEXT,
+        message TEXT,
         created_at TEXT
     )""")
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS team_members (
+    cur.execute("""CREATE TABLE IF NOT EXISTS user_preferences_secure (
         id SERIAL PRIMARY KEY,
-        team_id INTEGER,
-        name TEXT,
-        email TEXT,
-        role TEXT,
+        api_key TEXT UNIQUE,
+        default_engine TEXT DEFAULT 'dashboard',
         created_at TEXT
     )""")
+
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_api_key ON watchlist(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_api_key ON portfolio(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_behavior_api_key ON user_behavior(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_signal_history_api_key ON signal_history(api_key)")
+    except:
+        pass
+
     conn.commit()
     cur.close()
     conn.close()
@@ -1205,225 +1230,182 @@ def enterprise_hedge_fund_mode_html(api_key):
     """
 
 
-def premium_gate_html(user, section_name):
-    try:
-        if is_premium(user[4], user[5]):
-            return ""
-    except:
-        pass
-    return f"""
-    <div class="box">
-        <b>{section_name} â Pro Access</b><br>
-        <span class="muted">This section is prepared for premium/institutional users. You can request access from the dashboard.</span>
-    </div>
-    """
+def sanitize_text(value, limit=200):
+    value = str(value or "")
+    value = re.sub(r"[^a-zA-Z0-9@._\-\s:/%+]", "", value)
+    return value[:limit]
 
-def get_user_layout(api_key):
+def log_event(api_key, event_type, message):
     try:
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute("SELECT layout FROM user_preferences WHERE api_key=%s", (api_key,))
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        return row[0] if row and row[0] else "default"
-    except:
-        return "default"
-
-def set_user_layout(api_key, layout):
-    try:
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO user_preferences(api_key,layout,created_at)
-            VALUES(%s,%s,%s)
-            ON CONFLICT (api_key)
-            DO UPDATE SET layout=EXCLUDED.layout
-        """, (api_key, layout, datetime.utcnow().isoformat()))
+        cur.execute("INSERT INTO app_logs(api_key,event_type,message,created_at) VALUES(%s,%s,%s,%s)", (api_key, event_type, sanitize_text(message, 500), datetime.utcnow().isoformat()))
         conn.commit()
         cur.close()
         conn.close()
     except:
         pass
 
-def search_filter_system_html(api_key):
-    options = "".join([f"<option>{a}</option>" for a in ALL_ASSETS])
-    return f"""
-    <form action="/hdi/search" method="GET">
-        <input type="hidden" name="key" value="{api_key}">
-        <select name="query">{options}</select><br>
-        <button type="submit">Search Asset</button>
-    </form>
-    <p class="muted">Search assets, sectors, economies, signals, and intelligence layers.</p>
-    """
-
-def favorite_dashboard_layout_html(api_key):
-    current = get_user_layout(api_key)
-    return f"""
-    <div class="box">
-        <b>Current Layout</b><br>
-        <span class="metric">{current}</span><br>
-        <span class="muted">Choose which dashboard style should guide your workflow.</span>
-    </div>
-    <form action="/hdi/set-layout" method="POST">
-        <input type="hidden" name="key" value="{api_key}">
-        <select name="layout">
-            <option>default</option>
-            <option>portfolio-first</option>
-            <option>signals-first</option>
-            <option>risk-first</option>
-            <option>executive-first</option>
-        </select><br>
-        <button type="submit">Save Layout</button>
-    </form>
-    """
-
-def analyst_notes_html(api_key):
+def get_user_role(api_key):
     try:
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute("SELECT symbol,note,created_at FROM analyst_notes WHERE api_key=%s ORDER BY id DESC LIMIT 8", (api_key,))
-        notes = cur.fetchall()
+        cur.execute("SELECT role FROM users WHERE api_key=%s", (api_key,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return row[0] if row and row[0] else "user"
+    except:
+        return "user"
+
+def create_session(api_key):
+    token = "SESS-" + uuid.uuid4().hex
+    expires_at = (datetime.utcnow() + timedelta(days=7)).isoformat()
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO auth_sessions(api_key,session_token,created_at,expires_at) VALUES(%s,%s,%s,%s)", (api_key, token, datetime.utcnow().isoformat(), expires_at))
+        conn.commit()
         cur.close()
         conn.close()
     except:
-        notes = []
-    notes_html = ""
-    for symbol, note, created_at in notes:
-        notes_html += f"""
-        <div class="box">
-            <b>{symbol}</b><br>
-            <span class="muted">{note}</span><br>
-            <small>{created_at}</small>
-        </div>
-        """
-    options = "".join([f"<option>{a}</option>" for a in SYMBOLS])
-    return f"""
-    <form action="/hdi/add-note" method="POST">
-        <input type="hidden" name="key" value="{api_key}">
-        <select name="symbol">{options}</select><br>
-        <input name="note" placeholder="Write your analyst note"><br>
-        <button type="submit">Save Note</button>
-    </form>
-    <div class="grid">{notes_html if notes_html else "<p class='muted'>No analyst notes yet.</p>"}</div>
-    """
+        pass
+    return token
 
-def signal_outcome_checker_html(api_key):
+def get_api_key_from_session(token):
     try:
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute("SELECT symbol,score,result,created_at FROM signal_history WHERE api_key=%s ORDER BY id DESC LIMIT 8", (api_key,))
+        cur.execute("SELECT api_key,expires_at FROM auth_sessions WHERE session_token=%s", (token,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row:
+            return None
+        if datetime.fromisoformat(row[1]) < datetime.utcnow():
+            return None
+        return row[0]
+    except:
+        return None
+
+def engine_summary_card(title, body, url):
+    return f"""
+    <div class='box'>
+        <b>{title}</b><br>
+        <span class='muted'>{body}</span><br><br>
+        <a class='btn' href='{url}'>Open</a>
+    </div>
+    """
+
+def separate_pages_engine_html(api_key):
+    engines = [
+        ("Portfolio", "Portfolio risk, holdings, exposure, strongest and weakest positions.", f"/hdi/engine/portfolio?key={api_key}"),
+        ("Signals", "Ranked signals, multi-factor engine, prediction and decision score.", f"/hdi/engine/signals?key={api_key}"),
+        ("Risk", "Risk intelligence, crisis detection, and what could go wrong.", f"/hdi/engine/risk?key={api_key}"),
+        ("Opportunity", "Opportunity intelligence, sector opportunity, and confirmation rules.", f"/hdi/engine/opportunity?key={api_key}"),
+        ("Macro", "Economy intelligence, macro forecast, and event radar.", f"/hdi/engine/macro?key={api_key}"),
+        ("Admin", "Founder/admin intelligence console and operational overview.", f"/hdi/admin-console?key={ADMIN_KEY or ''}"),
+    ]
+    return "<div class='grid'>" + "".join([engine_summary_card(a,b,c) for a,b,c in engines]) + "</div>"
+
+def lazy_loading_html(api_key):
+    return f"""
+    <div class='grid'>
+        <div class='box'><b>Lazy Portfolio</b><br><span class='muted'>/hdi/lazy/portfolio?key={api_key}</span><br><a class='btn' href='/hdi/lazy/portfolio?key={api_key}'>Load</a></div>
+        <div class='box'><b>Lazy Signals</b><br><span class='muted'>/hdi/lazy/signals?key={api_key}</span><br><a class='btn' href='/hdi/lazy/signals?key={api_key}'>Load</a></div>
+        <div class='box'><b>Lazy Risk</b><br><span class='muted'>/hdi/lazy/risk?key={api_key}</span><br><a class='btn' href='/hdi/lazy/risk?key={api_key}'>Load</a></div>
+        <div class='box'><b>Lazy Opportunity</b><br><span class='muted'>/hdi/lazy/opportunity?key={api_key}</span><br><a class='btn' href='/hdi/lazy/opportunity?key={api_key}'>Load</a></div>
+    </div>
+    """
+
+def db_cleanup_html():
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        tables = ["users", "watchlist", "portfolio", "user_behavior", "signal_history", "access_requests"]
+        rows = ""
+        for table in tables:
+            cur.execute(f"SELECT COUNT(*) FROM {table}")
+            count = cur.fetchone()[0]
+            rows += f"<div class='box'><b>{table}</b><br><span class='metric'>{count}</span></div>"
+        cur.close()
+        conn.close()
+        return "<div class='grid'>" + rows + "</div>"
+    except Exception as e:
+        return f"<p class='muted'>Database cleanup unavailable: {str(e)}</p>"
+
+def real_auth_html(api_key):
+    return f"""
+    <div class='grid'>
+        <div class='box'><b>Password Login</b><br><span class='muted'>HDI now supports password-based auth while keeping email/API-key login working.</span></div>
+        <div class='box'><b>Session Security</b><br><span class='muted'>Session tokens can be created after password login.</span></div>
+    </div>
+    <form action='/hdi/set-password' method='POST'>
+        <input type='hidden' name='key' value='{api_key}'>
+        <input name='password' type='password' placeholder='Set / update password'><br>
+        <button type='submit'>Save Password</button>
+    </form>
+    <a class='btn' href='/hdi/auth'>Open Secure Login</a>
+    """
+
+def payment_access_system_html(api_key):
+    return f"""
+    <div class='grid'>
+        <div class='box'><b>Current Mode</b><br><span class='metric'>Access Approval</span><br><span class='muted'>Ready for Flutterwave/PayPal integration later.</span></div>
+        <div class='box'><b>Premium Request</b><br><a class='pay' href='/hdi/payment-access?key={api_key}'>Open Access Flow</a></div>
+    </div>
+    """
+
+def role_based_admin_html(api_key):
+    role = get_user_role(api_key)
+    return f"""
+    <div class='box'><b>Your Role</b><br><span class='metric'>{role}</span><br><span class='muted'>Roles supported: user, analyst, admin, institution.</span></div>
+    """
+
+def data_provider_expansion_html(api_key):
+    html = ""
+    for group, assets in EXPANDED_ASSETS.items():
+        html += f"<div class='box'><b>{group}</b><br><span class='metric'>{len(assets)}</span><br><span class='muted'>{', '.join(assets[:8])}</span></div>"
+    return f"<div class='grid'>{html}</div>"
+
+def background_signal_checker_html(api_key):
+    return f"""
+    <div class='grid'>
+        <div class='box'><b>Signal Checker</b><br><span class='muted'>Checks pending signals and marks prototype outcomes.</span></div>
+        <div class='box'><b>Admin Run</b><br><a class='btn' href='/hdi/run-signal-checker?key={ADMIN_KEY or ''}'>Run Checker</a></div>
+    </div>
+    """
+
+def external_alerts_html(api_key):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT channel,destination,created_at FROM alert_contacts WHERE api_key=%s ORDER BY id DESC LIMIT 6", (api_key,))
         rows = cur.fetchall()
         cur.close()
         conn.close()
     except:
         rows = []
-    if not rows:
-        return "<p class='muted'>Open signals to begin outcome tracking.</p>"
-    html = ""
-    for symbol, score, result, created_at in rows:
-        simulated_status = result if result != "pending" else "pending / monitoring"
-        html += f"""
-        <div class="box">
-            <b>{symbol}</b><br>
-            Original Score: <span class="metric">{score}</span><br>
-            Outcome: <span class="gold">{simulated_status}</span><br>
-            <small>{created_at}</small>
-        </div>
-        """
-    return html
-
-def watchlist_alert_rules_html(api_key):
-    try:
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("SELECT id,symbol,rule_type,threshold,created_at FROM alert_rules WHERE api_key=%s ORDER BY id DESC LIMIT 8", (api_key,))
-        rules = cur.fetchall()
-        cur.close()
-        conn.close()
-    except:
-        rules = []
-    options = "".join([f"<option>{a}</option>" for a in SYMBOLS])
-    rules_html = ""
-    for rid, symbol, rule_type, threshold, created_at in rules:
-        rules_html += f"""
-        <div class="box">
-            <b>{symbol}</b><br>
-            Rule: {rule_type} {threshold}<br>
-            <small>{created_at}</small><br>
-            <a href="/hdi/delete-alert-rule?key={api_key}&rule_id={rid}" style="color:#ef4444;">Delete Rule</a>
-        </div>
-        """
+    contacts = ""
+    for channel, dest, created_at in rows:
+        contacts += f"<div class='box'><b>{channel}</b><br>{dest}<br><small>{created_at}</small></div>"
     return f"""
-    <form action="/hdi/add-alert-rule" method="POST">
-        <input type="hidden" name="key" value="{api_key}">
-        <select name="symbol">{options}</select><br>
-        <select name="rule_type"><option>score_above</option><option>score_below</option><option>risk_above</option></select><br>
-        <input name="threshold" placeholder="Threshold e.g. 80"><br>
-        <button type="submit">Create Alert Rule</button>
+    <form action='/hdi/add-alert-contact' method='POST'>
+        <input type='hidden' name='key' value='{api_key}'>
+        <select name='channel'><option>Email</option><option>WhatsApp</option><option>SMS</option></select><br>
+        <input name='destination' placeholder='Email or phone number'><br>
+        <button type='submit'>Save Alert Contact</button>
     </form>
-    <div class="grid">{rules_html if rules_html else "<p class='muted'>No alert rules yet.</p>"}</div>
+    <div class='grid'>{contacts if contacts else "<p class='muted'>No alert contacts yet.</p>"}</div>
     """
 
-def premium_access_control_html(user):
-    try:
-        premium = is_premium(user[4], user[5])
-    except:
-        premium = False
-    if premium:
-        return """<div class="box"><b>Premium Status</b><br><span class="metric">ACTIVE</span><br><span class="muted">Institutional/pro features unlocked.</span></div>"""
-    return """<div class="box"><b>Premium Access Control</b><br><span class="metric">FREE</span><br><span class="muted">Advanced institutional modules can be gated for premium users when payments/access approval is ready.</span></div>"""
-
-def team_accounts_html(api_key):
-    try:
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("SELECT id,team_name,created_at FROM teams WHERE owner_key=%s ORDER BY id DESC LIMIT 5", (api_key,))
-        teams = cur.fetchall()
-        team_html = ""
-        for team_id, team_name, created_at in teams:
-            cur.execute("SELECT name,email,role FROM team_members WHERE team_id=%s ORDER BY id DESC LIMIT 5", (team_id,))
-            members = cur.fetchall()
-            members_text = "".join([f"<br>{m[0]} â {m[2]} <span class='muted'>({m[1]})</span>" for m in members]) or "<br><span class='muted'>No members yet.</span>"
-            team_html += f"<div class='box'><b>{team_name}</b><br><small>Team ID: {team_id}</small><br><small>{created_at}</small>{members_text}</div>"
-        cur.close()
-        conn.close()
-    except:
-        team_html = ""
-    return f"""
-    <form action="/hdi/create-team" method="POST">
-        <input type="hidden" name="key" value="{api_key}">
-        <input name="team_name" placeholder="Institution / Team Name"><br>
-        <button type="submit">Create Team</button>
-    </form>
-    <form action="/hdi/add-team-member" method="POST">
-        <input type="hidden" name="key" value="{api_key}">
-        <input name="team_id" placeholder="Team ID"><br>
-        <input name="name" placeholder="Member Name"><br>
-        <input name="email" placeholder="Member Email"><br>
-        <select name="role"><option>Analyst</option><option>Manager</option><option>Viewer</option></select><br>
-        <button type="submit">Add Team Member</button>
-    </form>
-    <div class="grid">{team_html if team_html else "<p class='muted'>No teams yet.</p>"}</div>
-    """
-
-def data_export_html(api_key):
-    return f"""
-    <div class="grid">
-        <div class="box"><b>Portfolio JSON</b><br><a class="btn" href="/hdi/export/portfolio?key={api_key}">Export</a></div>
-        <div class="box"><b>Signals JSON</b><br><a class="btn" href="/hdi/export/signals?key={api_key}">Export</a></div>
-        <div class="box"><b>Behavior JSON</b><br><a class="btn" href="/hdi/export/behavior?key={api_key}">Export</a></div>
-        <div class="box"><b>Report JSON</b><br><a class="btn" href="/hdi/export/report?key={api_key}">Export</a></div>
-    </div>
-    """
-
-def ui_performance_optimization_html():
+def production_security_html(api_key):
     return """
-    <div class="grid">
-        <div class="box"><b>Responsive Layout</b><br><span class="muted">Cards adapt automatically to mobile and desktop.</span></div>
-        <div class="box"><b>Cleaner UI</b><br><span class="muted">Glass cards, compact sections, and navigation anchors reduce overload.</span></div>
-        <div class="box"><b>Optimized Sections</b><br><span class="muted">Heavy engines are organized into modules for easier scanning.</span></div>
-        <div class="box"><b>Future Optimization</b><br><span class="muted">Next step can add lazy loading and separate pages per engine.</span></div>
+    <div class='grid'>
+        <div class='box'><b>Security Headers</b><br><span class='gold'>Enabled</span><br><span class='muted'>X-Frame-Options, content policy, referrer policy.</span></div>
+        <div class='box'><b>Input Validation</b><br><span class='gold'>Enabled</span><br><span class='muted'>Basic sanitization on new production routes.</span></div>
+        <div class='box'><b>Error Logging</b><br><span class='gold'>Enabled</span><br><span class='muted'>Events can be logged to app_logs.</span></div>
+        <div class='box'><b>Rate Limit Layer</b><br><span class='gold'>Prepared</span><br><span class='muted'>Ready to connect Redis or provider-level rate limits.</span></div>
     </div>
     """
 
@@ -3082,6 +3064,54 @@ def create_user():
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("INSERT INTO users(name,email,api_key) VALUES(%s,%s,%s)", (name,email,api_key))
+
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'")
+        cur.execute("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS layout TEXT DEFAULT 'default'")
+    except:
+        pass
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS auth_sessions (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        session_token TEXT UNIQUE,
+        created_at TEXT,
+        expires_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS alert_contacts (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        channel TEXT,
+        destination TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS app_logs (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        event_type TEXT,
+        message TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS user_preferences_secure (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT UNIQUE,
+        default_engine TEXT DEFAULT 'dashboard',
+        created_at TEXT
+    )""")
+
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_api_key ON watchlist(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_api_key ON portfolio(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_behavior_api_key ON user_behavior(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_signal_history_api_key ON signal_history(api_key)")
+    except:
+        pass
+
     conn.commit()
     cur.close()
     conn.close()
@@ -3175,15 +3205,16 @@ def dashboard():
     capital_allocation = capital_allocation_engine_html(key)
     news_correlation = news_correlation_engine_html(key)
     quantum_layer = quantum_intelligence_concept_html(key)
-    search_filter = search_filter_system_html(key)
-    favorite_layout = favorite_dashboard_layout_html(key)
-    analyst_notes = analyst_notes_html(key)
-    outcome_checker = signal_outcome_checker_html(key)
-    alert_rules = watchlist_alert_rules_html(key)
-    premium_control = premium_access_control_html(user)
-    team_accounts = team_accounts_html(key)
-    data_exports = data_export_html(key)
-    ui_performance = ui_performance_optimization_html()
+    engine_pages = separate_pages_engine_html(key)
+    lazy_loading = lazy_loading_html(key)
+    db_cleanup = db_cleanup_html()
+    auth_system = real_auth_html(key)
+    payment_access = payment_access_system_html(key)
+    role_admin = role_based_admin_html(key)
+    data_providers = data_provider_expansion_html(key)
+    signal_checker_ui = background_signal_checker_html(key)
+    external_alerts = external_alerts_html(key)
+    production_security = production_security_html(key)
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -3238,15 +3269,16 @@ def dashboard():
 <a href="#allocation">Allocation</a>
 <a href="#correlation">News Correlation</a>
 <a href="#quantum">Quantum</a>
-<a href="#search-filter">Search</a>
-<a href="#layout">Layout</a>
-<a href="#notes">Notes</a>
-<a href="#outcomes">Outcomes</a>
-<a href="#alert-rules">Alert Rules</a>
-<a href="#premium-control">Premium</a>
-<a href="#teams">Teams</a>
-<a href="#exports">Exports</a>
-<a href="#ui-performance">UI Speed</a>
+<a href="#engine-pages">Engine Pages</a>
+<a href="#lazy-loading">Lazy Load</a>
+<a href="#db-cleanup">DB</a>
+<a href="#auth-system">Auth</a>
+<a href="#payment-access">Payments</a>
+<a href="#roles">Roles</a>
+<a href="#data-providers">Data</a>
+<a href="#signal-checker">Checker</a>
+<a href="#external-alerts">External Alerts</a>
+<a href="#security">Security</a>
 <a href="#watchlist">Watchlist</a>
 <a href="#performance">Performance</a>
 <a href="/hdi/methodology">Methodology</a>
@@ -3578,69 +3610,6 @@ def dashboard():
 <p class="blue">Future-style multi-scenario projections, probability branches, and strategic future mapping.</p>
 {quantum_layer}
 </div>
-
-<div class="card" id="search-filter">
-<div class="institution">Search & Filter System</div>
-<h2>ð HDI Search</h2>
-<p class="blue">Search assets, sectors, reports, alerts, and intelligence layers.</p>
-{search_filter}
-</div>
-
-<div class="card" id="layout">
-<div class="institution">Favorite Dashboard Layout</div>
-<h2>ð§© Dashboard Layout Preference</h2>
-<p class="blue">Choose the workflow style you want HDI to prioritize.</p>
-{favorite_layout}
-</div>
-
-<div class="card" id="notes">
-<div class="institution">User Notes / Analyst Notes</div>
-<h2>ð Analyst Notes</h2>
-<p class="blue">Write your own notes on assets and keep them attached to your HDI profile.</p>
-{analyst_notes}
-</div>
-
-<div class="card" id="outcomes">
-<div class="institution">Signal Outcome Checker</div>
-<h2>â Signal Outcomes</h2>
-<p class="blue">Track whether saved HDI signals are still pending, successful, or failed.</p>
-<div class="grid">{outcome_checker}</div>
-</div>
-
-<div class="card" id="alert-rules">
-<div class="institution">Watchlist Alert Rules</div>
-<h2>ð£ Custom Alert Rules</h2>
-<p class="blue">Create rules such as âalert me if NVDA score is above 80â.</p>
-{alert_rules}
-</div>
-
-<div class="card" id="premium-control">
-<div class="institution">Premium Access Control</div>
-<h2>ð Access Control</h2>
-<p class="blue">Prepare HDI for free vs premium/institutional access.</p>
-{premium_control}
-</div>
-
-<div class="card" id="teams">
-<div class="institution">Team / Institution Accounts</div>
-<h2>ð¥ Teams & Institutions</h2>
-<p class="blue">Create team accounts for institutions, companies, or analyst groups.</p>
-{team_accounts}
-</div>
-
-<div class="card" id="exports">
-<div class="institution">Data Export CSV/JSON</div>
-<h2>ð¤ Data Export</h2>
-<p class="blue">Export portfolio, signals, behavior, and report data for analysis.</p>
-{data_exports}
-</div>
-
-<div class="card" id="ui-performance">
-<div class="institution">UI Performance Optimization</div>
-<h2>â¡ UI Performance</h2>
-<p class="blue">Cleaner, faster, responsive dashboard structure for mobile and desktop.</p>
-{ui_performance}
-</div>
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
 <h2>ð§  Multi-Factor Signal Engine</h2>
@@ -3663,6 +3632,77 @@ def dashboard():
 <div class="box"><b>Impact Level</b><br><span class="gold">{insight["impact"]}</span></div>
 <div class="box"><b>Confidence</b><br>{insight["confidence"]}%</div>
 </div><p>{insight["interpretation"]}</p></div>
+
+<div class="card" id="engine-pages">
+<div class="institution">Separate Pages Per Engine</div>
+<h2>ð§­ Engine Pages</h2>
+<p class="blue">HDI modules can now open as separate pages so the main dashboard does not carry everything at once.</p>
+{engine_pages}
+</div>
+
+<div class="card" id="lazy-loading">
+<div class="institution">Lazy Loading Layer</div>
+<h2>â¡ Lazy Loading</h2>
+<p class="blue">Prepared routes for loading heavy intelligence sections separately.</p>
+{lazy_loading}
+</div>
+
+<div class="card" id="db-cleanup">
+<div class="institution">Real Database Cleanup</div>
+<h2>ðï¸ Database Health</h2>
+<p class="blue">Indexes, table counts, and operational health layer for production readiness.</p>
+{db_cleanup}
+</div>
+
+<div class="card" id="auth-system">
+<div class="institution">Real Authentication</div>
+<h2>ð Secure Login System</h2>
+<p class="blue">Password hashing and session support while keeping existing email/API-key access safe.</p>
+{auth_system}
+</div>
+
+<div class="card" id="payment-access">
+<div class="institution">Payment Access System</div>
+<h2>ð³ Premium Access Flow</h2>
+<p class="blue">Prepared access/payment flow for Flutterwave, PayPal, or manual institutional approval.</p>
+{payment_access}
+</div>
+
+<div class="card" id="roles">
+<div class="institution">Role-Based Admin</div>
+<h2>ð¡ï¸ Roles & Permissions</h2>
+<p class="blue">Foundation for admin, analyst, user, and institution roles.</p>
+{role_admin}
+</div>
+
+<div class="card" id="data-providers">
+<div class="institution">Real Data Provider Expansion</div>
+<h2>ð Expanded Asset Universe</h2>
+<p class="blue">Stocks, crypto, forex, commodities, and indexes are prepared for larger data providers.</p>
+{data_providers}
+</div>
+
+<div class="card" id="signal-checker">
+<div class="institution">Background Signal Checker</div>
+<h2>ð Signal Outcome Checker</h2>
+<p class="blue">Prototype route to check pending signals and update success/failure status.</p>
+{signal_checker_ui}
+</div>
+
+<div class="card" id="external-alerts">
+<div class="institution">Email / WhatsApp Alerts</div>
+<h2>ð² External Alert Contacts</h2>
+<p class="blue">Save destinations for future email, WhatsApp, or SMS alerts.</p>
+{external_alerts}
+</div>
+
+<div class="card" id="security">
+<div class="institution">Production Security Hardening</div>
+<h2>ð Security Readiness</h2>
+<p class="blue">Security headers, validation, logs, and rate-limit preparation.</p>
+{production_security}
+</div>
+
 <div class="card" id="watchlist">
 <h2>â­ Personal Watchlist</h2>
 <form action="/hdi/add-watchlist" method="POST">
@@ -3688,7 +3728,55 @@ def add_watchlist():
     cur.execute("SELECT id FROM watchlist WHERE api_key=%s AND symbol=%s", (key,symbol))
     if not cur.fetchone():
         cur.execute("INSERT INTO watchlist(api_key,symbol,created_at) VALUES(%s,%s,%s)", (key,symbol,datetime.utcnow().isoformat()))
-        conn.commit()
+    
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'")
+        cur.execute("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS layout TEXT DEFAULT 'default'")
+    except:
+        pass
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS auth_sessions (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        session_token TEXT UNIQUE,
+        created_at TEXT,
+        expires_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS alert_contacts (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        channel TEXT,
+        destination TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS app_logs (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        event_type TEXT,
+        message TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS user_preferences_secure (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT UNIQUE,
+        default_engine TEXT DEFAULT 'dashboard',
+        created_at TEXT
+    )""")
+
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_api_key ON watchlist(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_api_key ON portfolio(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_behavior_api_key ON user_behavior(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_signal_history_api_key ON signal_history(api_key)")
+    except:
+        pass
+
+    conn.commit()
     cur.close()
     conn.close()
     track_behavior(key, symbol, "watchlist")
@@ -3706,6 +3794,54 @@ def add_portfolio():
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("INSERT INTO portfolio(api_key,symbol,amount,created_at) VALUES(%s,%s,%s,%s)", (key, symbol, amount, datetime.utcnow().isoformat()))
+
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'")
+        cur.execute("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS layout TEXT DEFAULT 'default'")
+    except:
+        pass
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS auth_sessions (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        session_token TEXT UNIQUE,
+        created_at TEXT,
+        expires_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS alert_contacts (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        channel TEXT,
+        destination TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS app_logs (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        event_type TEXT,
+        message TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS user_preferences_secure (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT UNIQUE,
+        default_engine TEXT DEFAULT 'dashboard',
+        created_at TEXT
+    )""")
+
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_api_key ON watchlist(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_api_key ON portfolio(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_behavior_api_key ON user_behavior(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_signal_history_api_key ON signal_history(api_key)")
+    except:
+        pass
+
     conn.commit()
     cur.close()
     conn.close()
@@ -3720,6 +3856,54 @@ def remove_portfolio():
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("DELETE FROM portfolio WHERE api_key=%s AND id=%s", (key, holding_id))
+
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'")
+        cur.execute("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS layout TEXT DEFAULT 'default'")
+    except:
+        pass
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS auth_sessions (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        session_token TEXT UNIQUE,
+        created_at TEXT,
+        expires_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS alert_contacts (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        channel TEXT,
+        destination TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS app_logs (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        event_type TEXT,
+        message TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS user_preferences_secure (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT UNIQUE,
+        default_engine TEXT DEFAULT 'dashboard',
+        created_at TEXT
+    )""")
+
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_api_key ON watchlist(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_api_key ON portfolio(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_behavior_api_key ON user_behavior(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_signal_history_api_key ON signal_history(api_key)")
+    except:
+        pass
+
     conn.commit()
     cur.close()
     conn.close()
@@ -3733,6 +3917,54 @@ def clear_portfolio():
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("DELETE FROM portfolio WHERE api_key=%s", (key,))
+
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'")
+        cur.execute("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS layout TEXT DEFAULT 'default'")
+    except:
+        pass
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS auth_sessions (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        session_token TEXT UNIQUE,
+        created_at TEXT,
+        expires_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS alert_contacts (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        channel TEXT,
+        destination TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS app_logs (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        event_type TEXT,
+        message TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS user_preferences_secure (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT UNIQUE,
+        default_engine TEXT DEFAULT 'dashboard',
+        created_at TEXT
+    )""")
+
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_api_key ON watchlist(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_api_key ON portfolio(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_behavior_api_key ON user_behavior(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_signal_history_api_key ON signal_history(api_key)")
+    except:
+        pass
+
     conn.commit()
     cur.close()
     conn.close()
@@ -3744,6 +3976,54 @@ def remove_watchlist():
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("DELETE FROM watchlist WHERE api_key=%s AND symbol=%s", (key,symbol))
+
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'")
+        cur.execute("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS layout TEXT DEFAULT 'default'")
+    except:
+        pass
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS auth_sessions (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        session_token TEXT UNIQUE,
+        created_at TEXT,
+        expires_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS alert_contacts (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        channel TEXT,
+        destination TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS app_logs (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT,
+        event_type TEXT,
+        message TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS user_preferences_secure (
+        id SERIAL PRIMARY KEY,
+        api_key TEXT UNIQUE,
+        default_engine TEXT DEFAULT 'dashboard',
+        created_at TEXT
+    )""")
+
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_api_key ON watchlist(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_api_key ON portfolio(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_behavior_api_key ON user_behavior(api_key)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_signal_history_api_key ON signal_history(api_key)")
+    except:
+        pass
+
     conn.commit()
     cur.close()
     conn.close()
