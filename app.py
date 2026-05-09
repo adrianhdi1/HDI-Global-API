@@ -1297,6 +1297,188 @@ def engine_summary_card(title, body, url):
     </div>
     """
 
+
+def microservice_architecture_html():
+    services = [
+        ("Signals Service", "Generates scores, rankings, predictions, and signal history."),
+        ("Portfolio Service", "Manages holdings, exposure, risk, rebalancing, and scenarios."),
+        ("News Service", "Reads sentiment, headlines, correlation, and event pressure."),
+        ("AI Engine", "Runs strategy, risk, opportunity, briefing, and decision-score logic."),
+        ("Notification Service", "Prepares dashboard alerts, rules, and future email/WhatsApp delivery.")
+    ]
+    html = ""
+    for name, role in services:
+        html += f"""
+        <div class="box">
+            <b>{name}</b><br>
+            Status: <span class="gold">Modular Ready</span><br>
+            <span class="muted">{role}</span>
+        </div>
+        """
+    return html
+
+def caching_layer_html():
+    cache_mode = "In-Memory Prototype"
+    redis_url = os.environ.get("REDIS_URL")
+    if redis_url:
+        cache_mode = "Redis URL Detected"
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Cache Mode</b><br><span class="metric">{cache_mode}</span></div>
+        <div class="box"><b>Dashboard Speed</b><br><span class="gold">Prepared</span><br><span class="muted">Signals, sectors, economies, and reports can be cached.</span></div>
+        <div class="box"><b>Recommended TTL</b><br><span class="metric">60s</span><br><span class="muted">Good for live intelligence without overloading APIs.</span></div>
+        <div class="box"><b>Future Redis Layer</b><br><span class="muted">Set REDIS_URL later to move cache from prototype to production.</span></div>
+    </div>
+    """
+
+def realtime_websocket_system_html(api_key):
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Realtime Mode</b><br><span class="metric">SSE Ready</span><br><span class="muted">Browser can stream live intelligence without manual refresh.</span></div>
+        <div class="box"><b>Live Endpoint</b><br><span class="muted">/hdi/events?key={api_key}</span></div>
+        <div class="box"><b>Future WebSocket</b><br><span class="muted">Can upgrade later to Flask-SocketIO or a separate realtime service.</span></div>
+        <div class="box"><b>Current Stream</b><br><span class="gold">Signals + Market Pulse</span></div>
+    </div>
+    """
+
+def advanced_charts_engine_html(api_key):
+    try:
+        ranked = generate_ranked_signals(api_key, limit=5)
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+
+    bars = ""
+    for s in ranked:
+        width = max(5, min(100, s["market_score"]))
+        bars += f"""
+        <div class="chart-row">
+            <b>{s["symbol"]}</b>
+            <div class="chart-track"><div class="chart-bar" style="width:{width}%"></div></div>
+            <span>{s["market_score"]}/100</span>
+        </div>
+        """
+
+    return f"""
+    <div class="box">
+        <b>Signal Strength Chart</b><br>
+        <span class="muted">Prototype institutional bar chart without external chart libraries.</span>
+        {bars}
+    </div>
+    """
+
+def ai_explainability_layer_html(api_key):
+    try:
+        top = generate_ranked_signals(api_key, limit=1)[0]
+    except:
+        top = generate_decision_signal(api_key=api_key)
+
+    factors = top["confidence_breakdown"]
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Why {top["symbol"]}?</b><br><span class="muted">HDI ranked it highly because its score, momentum, trend strength, volatility profile, and user relevance combine into a stronger signal.</span></div>
+        <div class="box"><b>Momentum</b><br><span class="metric">{factors["momentum"]}/100</span></div>
+        <div class="box"><b>Trend Strength</b><br><span class="metric">{factors["trend_strength"]}/100</span></div>
+        <div class="box"><b>Volatility Quality</b><br><span class="metric">{factors["volatility"]}/100</span></div>
+        <div class="box"><b>User Relevance</b><br><span class="metric">{factors["user_relevance"]}/100</span></div>
+        <div class="box"><b>Explainability Note</b><br><span class="gold">{top["recommendation"]}</span></div>
+    </div>
+    """
+
+def model_training_pipeline_html():
+    return """
+    <div class="grid">
+        <div class="box"><b>Dataset Collection</b><br><span class="gold">Prepared</span><br><span class="muted">Signals, outcomes, behavior, portfolio actions, and news context can be stored.</span></div>
+        <div class="box"><b>Feature Engineering</b><br><span class="gold">Prepared</span><br><span class="muted">Momentum, volatility, trend, relevance, macro, sentiment, and outcome labels.</span></div>
+        <div class="box"><b>Training Jobs</b><br><span class="gold">Future Ready</span><br><span class="muted">Can later run offline training scripts outside Flask.</span></div>
+        <div class="box"><b>Model Registry</b><br><span class="gold">Concept Ready</span><br><span class="muted">Version models by accuracy, signal quality, and deployment date.</span></div>
+    </div>
+    """
+
+def historical_data_warehouse_html(api_key):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM signal_history")
+        signals = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM user_behavior")
+        behavior = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM portfolio")
+        portfolio_rows = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+    except:
+        signals = behavior = portfolio_rows = 0
+
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Signal Records</b><br><span class="metric">{signals}</span></div>
+        <div class="box"><b>Behavior Records</b><br><span class="metric">{behavior}</span></div>
+        <div class="box"><b>Portfolio Records</b><br><span class="metric">{portfolio_rows}</span></div>
+        <div class="box"><b>Warehouse Status</b><br><span class="gold">Structured</span><br><span class="muted">Ready to expand into years of historical intelligence.</span></div>
+    </div>
+    """
+
+def institutional_api_keys_management_html(api_key):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""CREATE TABLE IF NOT EXISTS enterprise_api_keys (
+            id SERIAL PRIMARY KEY,
+            owner_key TEXT,
+            api_key TEXT UNIQUE,
+            label TEXT,
+            status TEXT DEFAULT 'active',
+            created_at TEXT
+        )""")
+        cur.execute("SELECT id, api_key, label, status, created_at FROM enterprise_api_keys WHERE owner_key=%s ORDER BY id DESC LIMIT 8", (api_key,))
+        rows = cur.fetchall()
+        conn.commit()
+        cur.close()
+        conn.close()
+    except:
+        rows = []
+
+    rows_html = ""
+    for rid, key_value, label, status, created_at in rows:
+        rows_html += f"""
+        <div class="box">
+            <b>{label}</b><br>
+            Key: <span class="muted">{key_value}</span><br>
+            Status: <span class="gold">{status}</span><br>
+            <small>{created_at}</small><br>
+            <a href="/hdi/revoke-api-key?key={api_key}&id={rid}" style="color:#ef4444;">Revoke</a>
+        </div>
+        """
+
+    return f"""
+    <form action="/hdi/create-api-key" method="POST">
+        <input type="hidden" name="key" value="{api_key}">
+        <input name="label" placeholder="API Key Label e.g. Institution Main Key"><br>
+        <button type="submit">Create Enterprise API Key</button>
+    </form>
+    <div class="grid">{rows_html if rows_html else "<p class='muted'>No enterprise API keys yet.</p>"}</div>
+    """
+
+def disaster_recovery_backup_html():
+    return """
+    <div class="grid">
+        <div class="box"><b>Backup Strategy</b><br><span class="gold">Prepared</span><br><span class="muted">Database dump, app.py backup, env vars checklist, and recovery path.</span></div>
+        <div class="box"><b>Recovery Mode</b><br><span class="gold">Manual Ready</span><br><span class="muted">Use git revert, database backup, and previous app backups.</span></div>
+        <div class="box"><b>Recommended Schedule</b><br><span class="metric">Daily</span><br><span class="muted">Automate later with cron or platform backups.</span></div>
+        <div class="box"><b>Critical Assets</b><br><span class="muted">Postgres DB, environment variables, source code, API keys.</span></div>
+    </div>
+    """
+
+def deployment_scaling_infrastructure_html():
+    return """
+    <div class="grid">
+        <div class="box"><b>Gunicorn</b><br><span class="gold">Compatible</span><br><span class="muted">Ready for production WSGI deployment.</span></div>
+        <div class="box"><b>Docker</b><br><span class="gold">Prepared</span><br><span class="muted">Can package Flask app and dependencies later.</span></div>
+        <div class="box"><b>Nginx</b><br><span class="gold">Future Ready</span><br><span class="muted">Reverse proxy, SSL, compression, caching.</span></div>
+        <div class="box"><b>Cloud Scaling</b><br><span class="gold">Render/Railway Ready</span><br><span class="muted">Scale web service + database + background worker.</span></div>
+    </div>
+    """
+
 def separate_pages_engine_html(api_key):
     engines = [
         ("Portfolio", "Portfolio risk, holdings, exposure, strongest and weakest positions.", f"/hdi/engine/portfolio?key={api_key}"),
@@ -2990,6 +3172,9 @@ def base_style():
     .metric{font-size:30px;font-weight:bold;color:#38bdf8;} .locked{filter:blur(3px);opacity:.55;}
     .nav{position:sticky;top:0;z-index:99;background:#020617;border:1px solid rgba(56,189,248,.18);border-radius:16px;padding:14px;margin-bottom:22px;}
     .nav a{color:#38bdf8;text-decoration:none;font-weight:bold;margin:8px;display:inline-block;}
+    .chart-row{margin:14px 0;}
+    .chart-track{height:12px;background:rgba(148,163,184,.18);border-radius:999px;overflow:hidden;margin:6px 0;}
+    .chart-bar{height:12px;background:#38bdf8;border-radius:999px;box-shadow:0 0 18px rgba(56,189,248,.65);}
     .stream{max-height:420px;overflow:hidden;}
     .stream-item{display:flex;gap:14px;align-items:flex-start;background:rgba(15,23,42,.55);border:1px solid rgba(56,189,248,.08);padding:14px;margin:10px;border-radius:16px;text-align:left;animation:pulseIn .8s ease;}
     .stream-dot{width:10px;height:10px;background:#38bdf8;border-radius:50%;margin-top:6px;box-shadow:0 0 18px #38bdf8;flex:0 0 auto;}
@@ -3215,6 +3400,16 @@ def dashboard():
     signal_checker_ui = background_signal_checker_html(key)
     external_alerts = external_alerts_html(key)
     production_security = production_security_html(key)
+    microservices = microservice_architecture_html()
+    cache_layer = caching_layer_html()
+    realtime_system = realtime_websocket_system_html(key)
+    advanced_charts = advanced_charts_engine_html(key)
+    explainability_layer = ai_explainability_layer_html(key)
+    training_pipeline = model_training_pipeline_html()
+    data_warehouse = historical_data_warehouse_html(key)
+    api_keys_management = institutional_api_keys_management_html(key)
+    backup_system = disaster_recovery_backup_html()
+    scaling_infra = deployment_scaling_infrastructure_html()
     premium_active = is_premium(user[4], user[5])
     status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
@@ -3279,6 +3474,16 @@ def dashboard():
 <a href="#signal-checker">Checker</a>
 <a href="#external-alerts">External Alerts</a>
 <a href="#security">Security</a>
+<a href="#microservices">Microservices</a>
+<a href="#cache">Cache</a>
+<a href="#realtime">Realtime</a>
+<a href="#charts">Charts</a>
+<a href="#explainability">Explainability</a>
+<a href="#training">Training</a>
+<a href="#warehouse">Warehouse</a>
+<a href="#api-keys">API Keys</a>
+<a href="#backup">Backup</a>
+<a href="#scaling">Scaling</a>
 <a href="#watchlist">Watchlist</a>
 <a href="#performance">Performance</a>
 <a href="/hdi/methodology">Methodology</a>
@@ -3701,6 +3906,76 @@ def dashboard():
 <h2>ð Security Readiness</h2>
 <p class="blue">Security headers, validation, logs, and rate-limit preparation.</p>
 {production_security}
+</div>
+
+<div class="card" id="microservices">
+<div class="institution">Microservice Architecture</div>
+<h2>ð§± HDI Modular Services</h2>
+<p class="blue">HDI is prepared to split into signals, portfolio, news, AI, and notification services.</p>
+<div class="grid">{microservices}</div>
+</div>
+
+<div class="card" id="cache">
+<div class="institution">Caching Layer</div>
+<h2>â¡ Redis / Cache Readiness</h2>
+<p class="blue">Prepared for Redis caching to make live dashboards faster and reduce API load.</p>
+{cache_layer}
+</div>
+
+<div class="card" id="realtime">
+<div class="institution">Realtime WebSocket System</div>
+<h2>ð´ Realtime Intelligence</h2>
+<p class="blue">SSE-ready live updates now; future WebSocket architecture prepared.</p>
+{realtime_system}
+</div>
+
+<div class="card" id="charts">
+<div class="institution">Advanced Charts Engine</div>
+<h2>ð Institutional Charts</h2>
+<p class="blue">Prototype advanced charts for signal strength, flows, volatility, and future macro overlays.</p>
+{advanced_charts}
+</div>
+
+<div class="card" id="explainability">
+<div class="institution">AI Explainability Layer</div>
+<h2>ð§  Why HDI Thinks This</h2>
+<p class="blue">HDI explains why a signal, recommendation, or score was generated.</p>
+{explainability_layer}
+</div>
+
+<div class="card" id="training">
+<div class="institution">Model Training Pipeline</div>
+<h2>ðï¸ AI Training Pipeline</h2>
+<p class="blue">Prepared for future ML training using signals, outcomes, behavior, macro, and sentiment data.</p>
+{training_pipeline}
+</div>
+
+<div class="card" id="warehouse">
+<div class="institution">Historical Data Warehouse</div>
+<h2>ðï¸ HDI Data Warehouse</h2>
+<p class="blue">Structured foundation for long-term signal, sentiment, macro, behavior, and outcome history.</p>
+{data_warehouse}
+</div>
+
+<div class="card" id="api-keys">
+<div class="institution">Institutional API Keys Management</div>
+<h2>ð Enterprise API Keys</h2>
+<p class="blue">Create and revoke institutional API keys for future enterprise integrations.</p>
+{api_keys_management}
+</div>
+
+<div class="card" id="backup">
+<div class="institution">Disaster Recovery & Backup</div>
+<h2>ð Backup & Recovery</h2>
+<p class="blue">Prepared backup and restore strategy for code, database, environment, and deployment recovery.</p>
+{backup_system}
+</div>
+
+<div class="card" id="scaling">
+<div class="institution">Deployment Scaling Infrastructure</div>
+<h2>ð Scaling Infrastructure</h2>
+<p class="blue">Prepared for Docker, Gunicorn, Nginx, Render/Railway scaling, and cloud architecture.</p>
+{scaling_infra}
 </div>
 
 <div class="card" id="watchlist">
