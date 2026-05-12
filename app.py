@@ -3268,6 +3268,156 @@ def executive_brief_html(api_key):
     </div>
     """
 
+
+def hdi_shell_nav(key):
+    return f"""
+    <div class="sidebar">
+        <div class="brand">HDI</div>
+        <a href="/hdi/dashboard?key={key}">Overview</a>
+        <a href="/hdi/signals-page?key={key}">Signals</a>
+        <a href="/hdi/portfolio-page?key={key}">Portfolio</a>
+        <a href="/hdi/risk-page?key={key}">Risk</a>
+        <a href="/hdi/opportunities-page?key={key}">Opportunities</a>
+        <a href="/hdi/reports-page?key={key}">Reports</a>
+        <a href="/hdi/ai-terminal?key={key}">AI Terminal</a>
+        <a href="/hdi/admin-console">Admin</a>
+        <a href="/">Logout</a>
+    </div>
+    """
+
+def hdi_page(title, subtitle, key, content):
+    return f"""
+<html>
+<head>
+<title>{title}</title>
+{base_style()}
+</head>
+<body>
+{hdi_shell_nav(key)}
+<div class="main">
+<div class="container compact">
+<div class="card hero">
+<div class="institution">HDI Intelligence Platform</div>
+<h1>{title}</h1>
+<p class="blue">{subtitle}</p>
+</div>
+{content}
+</div>
+</div>
+</body>
+</html>
+"""
+
+def mini_chart_html(api_key):
+    try:
+        ranked = generate_ranked_signals(api_key, limit=6)
+    except:
+        ranked = [generate_decision_signal(api_key=api_key)]
+
+    rows = ""
+    for s in ranked:
+        width = max(8, min(100, int(s["market_score"])))
+        rows += f"""
+        <div class="chart-row">
+            <b>{s["symbol"]}</b>
+            <div class="chart-track">
+                <div class="chart-bar" style="width:{width}%"></div>
+            </div>
+            <span>{s["market_score"]}/100</span>
+        </div>
+        """
+    return f"""
+    <div class="box">
+        <b>Signal Strength Chart</b><br>
+        <span class="muted">Quick visual ranking for institutional scanning.</span>
+        {rows}
+    </div>
+    """
+
+def compact_dashboard_summary(api_key):
+    try:
+        top = generate_ranked_signals(api_key, limit=1)[0]
+    except:
+        top = generate_decision_signal(api_key=api_key)
+
+    try:
+        sectors = generate_sector_intelligence()
+        sector = sectors[0] if sectors else None
+    except:
+        sector = None
+
+    try:
+        economies = generate_economy_intelligence()
+        economy = economies[0] if economies else None
+    except:
+        economy = None
+
+    sector_line = f"{sector['sector']} ({sector['sector_score']}/100)" if sector else "Analyzing"
+    economy_line = f"{economy['economy']} â {economy['mood']}" if economy else "Analyzing"
+
+    return f"""
+    <div class="grid">
+        <div class="box"><b>Top Signal</b><br>{top["symbol"]}<br><span class="metric">{top["market_score"]}/100</span><br><span class="gold">{top["priority"]}</span></div>
+        <div class="box"><b>Strongest Sector</b><br><span class="metric">{sector_line}</span></div>
+        <div class="box"><b>Macro Mood</b><br><span class="gold">{economy_line}</span></div>
+        <div class="box"><b>System Mode</b><br><span class="metric">Structured</span><br><span class="muted">Pages, sidebar, charts, AI terminal, cleaner UX.</span></div>
+    </div>
+    """
+
+def ai_terminal_html(api_key):
+    try:
+        top = generate_ranked_signals(api_key, limit=1)[0]
+    except:
+        top = generate_decision_signal(api_key=api_key)
+
+    try:
+        brief = ai_briefing_engine_html(api_key)
+    except:
+        brief = "<p class='muted'>AI briefing is initializing.</p>"
+
+    return f"""
+    <div class="terminal-box">
+        <div class="terminal-line">HDI AI TERMINAL ONLINE</div>
+        <div class="terminal-line">Question: What is the strongest opportunity right now?</div>
+        <div class="terminal-answer">Answer: {top["symbol"]} is the current leading signal with score {top["market_score"]}/100 and {top["priority"]} priority.</div>
+        <div class="terminal-line">Recommended Next Watch: momentum confirmation, risk pressure, sector strength, and news sentiment.</div>
+    </div>
+
+    <div class="card">
+        <div class="institution">Analyst Briefing</div>
+        <h2>AI Strategy Brief</h2>
+        {brief}
+    </div>
+    """
+
+def clean_overview_html(api_key):
+    return f"""
+    <div class="card">
+        <div class="institution">Executive Overview</div>
+        <h2>Clean Intelligence Summary</h2>
+        {compact_dashboard_summary(api_key)}
+    </div>
+
+    <div class="card">
+        <div class="institution">Charts</div>
+        <h2>Signal Strength</h2>
+        {mini_chart_html(api_key)}
+    </div>
+
+    <div class="card">
+        <div class="institution">Fast Actions</div>
+        <h2>Open HDI Modules</h2>
+        <div class="grid">
+            <a class="module-link" href="/hdi/signals-page?key={api_key}">Signals</a>
+            <a class="module-link" href="/hdi/portfolio-page?key={api_key}">Portfolio</a>
+            <a class="module-link" href="/hdi/risk-page?key={api_key}">Risk</a>
+            <a class="module-link" href="/hdi/opportunities-page?key={api_key}">Opportunities</a>
+            <a class="module-link" href="/hdi/reports-page?key={api_key}">Reports</a>
+            <a class="module-link" href="/hdi/ai-terminal?key={api_key}">AI Terminal</a>
+        </div>
+    </div>
+    """
+
 def base_style():
     return """
     <style>
@@ -3306,6 +3456,30 @@ def base_style():
     .heat-strong{background:rgba(22,101,52,.38);border-color:rgba(34,197,94,.35);}
     .heat-watch{background:rgba(113,63,18,.38);border-color:rgba(250,204,21,.30);}
     .heat-risk{background:rgba(127,29,29,.38);border-color:rgba(248,113,113,.30);}
+
+    .sidebar{position:fixed;left:0;top:0;bottom:0;width:220px;background:rgba(2,6,23,.96);border-right:1px solid rgba(56,189,248,.16);padding:22px 14px;z-index:200;overflow:auto;}
+    .sidebar .brand{font-size:26px;font-weight:bold;color:#38bdf8;margin:8px 10px 24px 10px;letter-spacing:2px;}
+    .sidebar a{display:block;color:#cbd5e1;text-decoration:none;padding:12px 14px;border-radius:12px;margin:5px 0;font-weight:bold;text-align:left;}
+    .sidebar a:hover{background:rgba(56,189,248,.12);color:white;}
+    .main{margin-left:240px;}
+    .compact{max-width:1120px;padding:34px 18px;}
+    .hero{padding:30px!important;}
+    .module-link{background:rgba(15,23,42,.75);border:1px solid rgba(56,189,248,.15);border-radius:18px;padding:22px;text-decoration:none;color:#38bdf8;font-weight:bold;text-align:left;}
+    .module-link:hover{border-color:rgba(56,189,248,.45);transform:translateY(-2px);}
+    .terminal-box{background:#020617;border:1px solid rgba(34,197,94,.28);border-radius:20px;padding:22px;margin-bottom:24px;text-align:left;box-shadow:0 0 30px rgba(34,197,94,.08);}
+    .terminal-line{color:#86efac;margin:10px 0;font-family:monospace;}
+    .terminal-answer{color:#38bdf8;margin:12px 0;font-family:monospace;font-weight:bold;}
+    .chart-row{margin:14px 0;}
+    .chart-track{height:12px;background:rgba(148,163,184,.18);border-radius:999px;overflow:hidden;margin:6px 0;}
+    .chart-bar{height:12px;background:#38bdf8;border-radius:999px;box-shadow:0 0 18px rgba(56,189,248,.65);}
+    @media(max-width:800px){
+        .sidebar{position:relative;width:auto;height:auto;border-right:none;border-bottom:1px solid rgba(56,189,248,.16);}
+        .sidebar a{display:inline-block;margin:4px;}
+        .main{margin-left:0;}
+        .container{padding:22px 12px;}
+        h1{font-size:30px;}
+    }
+
     </style>
     """
 
@@ -3542,6 +3716,7 @@ def dashboard():
 <head><title>HDI Dashboard</title>{base_style()}<script>setTimeout(function(){{window.location.reload();}},60000);</script></head>
 <body><div class="container">
 <div class="nav">
+<a href="/hdi/clean-overview?key={key}">Clean View</a>
 <a href="/hdi/profile?key={key}">Profile</a>
 <a href="#brief">Brief</a>
 <a href="#live">Live Stream</a>
@@ -5234,6 +5409,103 @@ def test_plan_api():
 @app.route("/hdi/cicd-plan")
 def cicd_plan_api():
     return jsonify({"pipeline": ["install dependencies", "run tests", "validate security", "deploy"], "tool": "GitHub Actions", "status": "prepared"})
+
+
+@app.route("/hdi/clean-overview")
+def clean_overview_page():
+    key = request.args.get("key")
+    user = get_user_by_key(key)
+    if not user:
+        return "Invalid access"
+    return hdi_page("HDI Clean Overview", "Structured, faster, cleaner executive view.", key, clean_overview_html(key))
+
+@app.route("/hdi/signals-page")
+def signals_page():
+    key = request.args.get("key")
+    user = get_user_by_key(key)
+    if not user:
+        return "Invalid access"
+    content = f"""
+    <div class="card"><div class="institution">Signals</div><h2>Ranked Signals</h2><div class="grid">{ranked_signals_html(key)}</div></div>
+    <div class="card"><div class="institution">Charts</div><h2>Signal Strength</h2>{mini_chart_html(key)}</div>
+    <div class="card"><div class="institution">Prediction</div><h2>AI Prediction Engine</h2><div class="grid">{ai_prediction_engine_html(key)}</div></div>
+    """
+    return hdi_page("Signals Intelligence", "Ranked signals, prediction, and visual strength chart.", key, content)
+
+@app.route("/hdi/portfolio-page")
+def portfolio_page():
+    key = request.args.get("key")
+    user = get_user_by_key(key)
+    if not user:
+        return "Invalid access"
+    content = f"""
+    <div class="card"><div class="institution">Portfolio</div><h2>Portfolio Intelligence</h2>{portfolio_intelligence_html(key)}</div>
+    <div class="card"><div class="institution">Scenario</div><h2>Scenario Simulator</h2>{portfolio_scenario_html(key)}</div>
+    """
+    return hdi_page("Portfolio Intelligence", "Exposure, holdings, risk, and scenario analysis.", key, content)
+
+@app.route("/hdi/risk-page")
+def risk_page():
+    key = request.args.get("key")
+    user = get_user_by_key(key)
+    if not user:
+        return "Invalid access"
+    content = f"""
+    <div class="card"><div class="institution">Risk</div><h2>Risk Intelligence Engine</h2>{risk_intelligence_engine_html(key)}</div>
+    <div class="card"><div class="institution">Crisis</div><h2>Crisis Detection</h2>{predictive_crisis_detection_html(key)}</div>
+    """
+    return hdi_page("Risk Intelligence", "Risk, crisis pressure, volatility, and what could go wrong.", key, content)
+
+@app.route("/hdi/opportunities-page")
+def opportunities_page():
+    key = request.args.get("key")
+    user = get_user_by_key(key)
+    if not user:
+        return "Invalid access"
+    content = f"""
+    <div class="card"><div class="institution">Opportunities</div><h2>Opportunity Intelligence</h2>{opportunity_intelligence_engine_html(key)}</div>
+    <div class="card"><div class="institution">Strategy</div><h2>Strategy Recommendation</h2>{strategy_recommendation_engine_html(key)}</div>
+    """
+    return hdi_page("Opportunity Intelligence", "Opportunities, confirmation, strategy, and decision zones.", key, content)
+
+@app.route("/hdi/reports-page")
+def reports_page():
+    key = request.args.get("key")
+    user = get_user_by_key(key)
+    if not user:
+        return "Invalid access"
+    content = f"""
+    <div class="card"><div class="institution">Reports</div><h2>AI Report</h2><a class="btn" href="/hdi/report?key={key}">Open Full Report</a><a class="btn" href="/hdi/report-pdf?key={key}">PDF / Print View</a></div>
+    {ai_report_html(key)}
+    """
+    return hdi_page("Reports", "AI report generator and institutional report view.", key, content)
+
+@app.route("/hdi/ai-terminal")
+def ai_terminal_page():
+    key = request.args.get("key")
+    user = get_user_by_key(key)
+    if not user:
+        return "Invalid access"
+    return hdi_page("AI Terminal", "Focused analyst-style AI terminal for HDI intelligence.", key, ai_terminal_html(key))
+
+@app.route("/hdi/phase-upgrade")
+def phase_upgrade_api():
+    return jsonify({
+        "status": "active",
+        "phase": "Structure + Experience + Speed",
+        "features": [
+            "separate pages per engine",
+            "sidebar navigation",
+            "clean overview",
+            "reduced dashboard clutter",
+            "lightweight charts",
+            "AI terminal page",
+            "mobile responsive shell",
+            "module links",
+            "faster scanning",
+            "institutional minimalism"
+        ]
+    })
 
 @app.route("/hdi/pay")
 def pay():
