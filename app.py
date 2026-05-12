@@ -1298,106 +1298,6 @@ def engine_summary_card(title, body, url):
     """
 
 
-\n
-def codebase_refactor_html():
-    return """
-    <div class="grid">
-        <div class="box"><b>Current Structure</b><br><span class="metric">Single app.py</span><br><span class="muted">Good for MVP speed.</span></div>
-        <div class="box"><b>Target Structure</b><br><span class="gold">Modular Codebase</span><br><span class="muted">routes, services, repositories, config, utils, templates, static.</span></div>
-        <div class="box"><b>Refactor Benefit</b><br><span class="muted">Cleaner code, easier scaling, safer maintenance.</span></div>
-        <div class="box"><b>Status</b><br><span class="gold">Roadmap Ready</span></div>
-    </div>
-    """
-
-def blueprint_routes_html():
-    return """
-    <div class="grid">
-        <div class="box"><b>Auth Blueprint</b><br><span class="muted">login, register, logout, sessions.</span></div>
-        <div class="box"><b>Dashboard Blueprint</b><br><span class="muted">dashboard, profile, portfolio, watchlist.</span></div>
-        <div class="box"><b>Admin Blueprint</b><br><span class="muted">admin console, users, approvals, analytics.</span></div>
-        <div class="box"><b>API Blueprint</b><br><span class="muted">versioned enterprise endpoints.</span></div>
-    </div>
-    """
-
-def service_layer_html():
-    items = [
-        ("SignalService", "signals, rankings, predictions"),
-        ("PortfolioService", "holdings, exposure, risk"),
-        ("RiskService", "asset, portfolio, macro risk"),
-        ("OpportunityService", "opportunity zones and confirmation"),
-        ("ReportService", "reports, exports, PDF views"),
-        ("NotificationService", "alerts and external notifications")
-    ]
-    return "".join([f"<div class='box'><b>{a}</b><br><span class='gold'>Planned Service</span><br><span class='muted'>{b}</span></div>" for a,b in items])
-
-def repository_layer_html():
-    items = [
-        ("UserRepository", "users, sessions, roles"),
-        ("PortfolioRepository", "holdings and exposure"),
-        ("SignalRepository", "signal history and outcomes"),
-        ("BehaviorRepository", "behavior, preferences, memory"),
-        ("AlertRepository", "rules, contacts, alerts"),
-        ("TeamRepository", "teams and institution accounts")
-    ]
-    return "".join([f"<div class='box'><b>{a}</b><br><span class='gold'>Repository Ready</span><br><span class='muted'>{b}</span></div>" for a,b in items])
-
-def config_management_html():
-    env = os.environ.get("FLASK_ENV", "production")
-    return f"""
-    <div class="grid">
-        <div class="box"><b>Current Environment</b><br><span class="metric">{env}</span></div>
-        <div class="box"><b>Development</b><br><span class="muted">local DB, mock data, debug tools.</span></div>
-        <div class="box"><b>Staging</b><br><span class="muted">pre-production testing and QA.</span></div>
-        <div class="box"><b>Production</b><br><span class="muted">secure headers, keys, monitoring, rate limits.</span></div>
-    </div>
-    """
-
-def environment_validation_html():
-    checks = [
-        ("DATABASE_URL", bool(DATABASE_URL)),
-        ("ALPHA_VANTAGE_KEY", bool(ALPHA_VANTAGE_KEY)),
-        ("ADMIN_KEY", bool(ADMIN_KEY)),
-        ("REDIS_URL", bool(os.environ.get("REDIS_URL"))),
-        ("SECRET_KEY", bool(os.environ.get("SECRET_KEY")))
-    ]
-    html = ""
-    for name, ok in checks:
-        html += f"<div class='box'><b>{name}</b><br><span class='gold'>{'SET' if ok else 'MISSING / OPTIONAL'}</span></div>"
-    return f"<div class='grid'>{html}</div>"
-
-def api_documentation_html():
-    docs = [
-        ("/hdi/real-signal?key=USER_KEY", "Generate one HDI signal."),
-        ("/hdi/ranked-signals?user_key=USER_KEY", "Return ranked signals."),
-        ("/hdi/portfolio?key=USER_KEY", "Return portfolio holdings."),
-        ("/hdi/predictions?key=USER_KEY", "Return predictions."),
-        ("/hdi/risk-intelligence?key=USER_KEY", "Return risk intelligence."),
-        ("/hdi/opportunity-intelligence?key=USER_KEY", "Return opportunity intelligence."),
-        ("/api/v1/signals?key=USER_KEY", "Versioned enterprise signals."),
-        ("/api/v1/portfolio?key=USER_KEY", "Versioned portfolio API.")
-    ]
-    return "".join([f"<div class='box'><b>{a}</b><br><span class='muted'>{b}</span></div>" for a,b in docs])
-
-def versioned_api_html(api_key):
-    return f"""
-    <div class="grid">
-        <div class="box"><b>Signals API v1</b><br><span class="muted">/api/v1/signals?key={api_key}</span></div>
-        <div class="box"><b>Portfolio API v1</b><br><span class="muted">/api/v1/portfolio?key={api_key}</span></div>
-        <div class="box"><b>Risk API v1</b><br><span class="muted">/api/v1/risk?key={api_key}</span></div>
-        <div class="box"><b>Opportunity API v1</b><br><span class="muted">/api/v1/opportunity?key={api_key}</span></div>
-    </div>
-    """
-
-def frontend_design_system_html():
-    items = ["Card Component", "Metric Component", "Navigation Component", "Heatmap Component", "Stream Component", "Form Component"]
-    return "<div class='grid'>" + "".join([f"<div class='box'><b>{x}</b><br><span class='muted'>Reusable HDI UI component.</span></div>" for x in items]) + "</div>"
-
-def performance_profiling_html(api_key):
-    sections = [("Signals", 180), ("Portfolio", 220), ("News", 480), ("Heatmap", 240), ("Reports", 350), ("Dashboard", 1600)]
-    html = ""
-    for name, ms in sections:
-        html += f"<div class='box'><b>{name}</b><br>Estimated Load: <span class='metric'>{ms}ms</span><br><span class='gold'>{'Fast' if ms < 250 else 'Watch' if ms < 700 else 'Heavy'}</span></div>"
-    return html
 
 def frontend_backend_separation_html():
     return """
@@ -4281,16 +4181,6 @@ def dashboard():
 <p class="blue">Clean demo experience with impressive sample intelligence and no real user data exposure.</p>
 {investor_demo}
 </div>
-<div class="card" id="refactor"><div class="institution">Codebase Refactor</div><h2>ð§± Modular Codebase Plan</h2><p class="blue">Prepare HDI to move from one large app.py into professional modules.</p>{refactor_plan}</div>
-<div class="card" id="blueprints"><div class="institution">Blueprint Routes</div><h2>ðºï¸ Flask Blueprint Architecture</h2><p class="blue">Route separation for auth, dashboard, admin, and API.</p>{blueprint_plan}</div>
-<div class="card" id="services"><div class="institution">Service Layer</div><h2>âï¸ HDI Service Layer</h2><p class="blue">Move business logic into services.</p><div class="grid">{service_layer}</div></div>
-<div class="card" id="repositories"><div class="institution">Repository Layer</div><h2>ðï¸ HDI Repository Layer</h2><p class="blue">Centralize database queries.</p><div class="grid">{repository_layer}</div></div>
-<div class="card" id="config"><div class="institution">Config Management</div><h2>ð§© Dev / Staging / Production Config</h2><p class="blue">Prepare environment-specific configuration.</p>{config_management}</div>
-<div class="card" id="env-validation"><div class="institution">Environment Validation</div><h2>â Environment Readiness Check</h2><p class="blue">Check important keys and variables.</p>{env_validation}</div>
-<div class="card" id="docs"><div class="institution">API Documentation</div><h2>ð HDI API Docs</h2><p class="blue">Developer-facing documentation.</p><div class="grid">{api_docs}</div></div>
-<div class="card" id="api-v1"><div class="institution">Versioned API</div><h2>ð¢ API v1 Enterprise Layer</h2><p class="blue">Stable versioned endpoints.</p>{api_v1}</div>
-<div class="card" id="design-system"><div class="institution">Frontend Design System</div><h2>ð¨ HDI Design System</h2><p class="blue">Reusable UI components.</p>{design_system}</div>
-<div class="card" id="profiling"><div class="institution">Performance Profiling</div><h2>â¡ Dashboard Performance Profiling</h2><p class="blue">Identify slow sections.</p><div class="grid">{performance_profiling}</div></div>
 
 <div class="card" id="watchlist">
 <h2>â­ Personal Watchlist</h2>
