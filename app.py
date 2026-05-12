@@ -500,7 +500,7 @@ def ranked_signals_html(api_key):
             Score: <span class="metric">{s["market_score"]}/100</span><br>
             Priority: <span class="gold">{s["priority"]}</span><br>
             HDI Recommendation: {s["recommendation"]}<br>
-            <span class="muted">Strategic Action: ð Locked</span>
+            <span class="muted">Strategic Action:  Locked</span>
         </div>
         """
     return html
@@ -585,7 +585,7 @@ def watchlist_html(api_key):
             <span style="color:{color};font-size:22px;font-weight:bold;">{sign}{signal["change"]}%</span>
             <br><span class="muted">{signal["micro_result"]}</span>
             <br><span class="muted">Priority: {signal["priority"]}</span>
-            <br><span class="muted">Strategic Action: ð Locked</span>
+            <br><span class="muted">Strategic Action:  Locked</span>
             <br><a href="/hdi/remove-watchlist?key={api_key}&symbol={symbol}" style="color:#ef4444;">Remove</a>
         </div>
         """
@@ -2795,25 +2795,25 @@ def admin_intelligence_console_html():
 
     <div class="card">
         <div class="institution">User Focus Intelligence</div>
-        <h2>ð¥ Most Watched / Used Assets</h2>
+        <h2>Most Watched / Used Assets</h2>
         <div class="grid">{assets_html if assets_html else "<p class='muted'>No asset behavior yet.</p>"}</div>
     </div>
 
     <div class="card">
         <div class="institution">Behavior Trends</div>
-        <h2>ð§  Most Common User Actions</h2>
+        <h2>Most Common User Actions</h2>
         <div class="grid">{actions_html if actions_html else "<p class='muted'>No behavior actions yet.</p>"}</div>
     </div>
 
     <div class="card">
         <div class="institution">Access Pipeline</div>
-        <h2>ð© Latest Access Requests</h2>
+        <h2>Latest Access Requests</h2>
         <div class="grid">{requests_html if requests_html else "<p class='muted'>No access requests yet.</p>"}</div>
     </div>
 
     <div class="card">
         <div class="institution">Signal Operations</div>
-        <h2>ð Latest Saved Signals</h2>
+        <h2>Latest Saved Signals</h2>
         <div class="grid">{signals_html if signals_html else "<p class='muted'>No saved signals yet.</p>"}</div>
     </div>
     """
@@ -3230,7 +3230,7 @@ def executive_brief_html(api_key):
     return f"""
     <div class="card" id="brief">
     <div class="institution">Executive Brief</div>
-    <h2>â¡ HDI Intelligence Summary</h2>
+    <h2>HDI Intelligence Summary</h2>
     <p class="blue">Fast institutional overview of the most important decision signals.</p>
 
     <div class="grid">
@@ -3480,6 +3480,16 @@ def base_style():
         h1{font-size:30px;}
     }
 
+
+    .minimal-nav{padding:14px 16px;text-align:left;line-height:1.9;}
+    .minimal-nav a{font-size:14px;margin:4px 10px;color:#7dd3fc;}
+    .card h2{letter-spacing:.2px;}
+    .institution{text-transform:uppercase;}
+    .box{word-break:normal;}
+    @media(max-width:800px){
+        .minimal-nav a{display:inline-block;font-size:13px;margin:3px 6px;}
+    }
+
     </style>
     """
 
@@ -3709,92 +3719,21 @@ def dashboard():
     cicd_pipeline = cicd_pipeline_html()
     investor_demo = investor_demo_mode_html()
     premium_active = is_premium(user[4], user[5])
-    status = "Institutional Premium Active â" if premium_active else "Private Beta / Free Access ð"
+    status = "Institutional Premium Active " if premium_active else "Private Beta / Free Access "
     access_button = "" if premium_active else f"<a class='pay' href='/hdi/request-access?key={key}'>Request Institutional Access</a>"
     return f"""
 <html>
 <head><title>HDI Dashboard</title>{base_style()}<script>setTimeout(function(){{window.location.reload();}},60000);</script></head>
 <body><div class="container">
-<div class="nav">
-<a href="/hdi/clean-overview?key={key}">Clean View</a>
+<div class="nav minimal-nav">
+<a href="/hdi/clean-overview?key={key}">Overview</a>
+<a href="/hdi/signals-page?key={key}">Signals</a>
+<a href="/hdi/portfolio-page?key={key}">Portfolio</a>
+<a href="/hdi/risk-page?key={key}">Risk</a>
+<a href="/hdi/opportunities-page?key={key}">Opportunities</a>
+<a href="/hdi/reports-page?key={key}">Reports</a>
+<a href="/hdi/ai-terminal?key={key}">AI Terminal</a>
 <a href="/hdi/profile?key={key}">Profile</a>
-<a href="#brief">Brief</a>
-<a href="#live">Live Stream</a>
-<a href="#alerts">Alerts</a>
-<a href="#heatmap">Heatmap</a>
-<a href="#behavior">Behavior</a>
-<a href="#portfolio">Portfolio</a>
-<a href="#economy">Economy</a>
-<a href="#sectors">Sectors</a>
-<a href="#news">News</a>
-<a href="#signals">Signals</a>
-<a href="#predictions">Predictions</a>
-<a href="#briefing">AI Briefing</a>
-<a href="#risk">Risk</a>
-<a href="#opportunity">Opportunity</a>
-<a href="#strategy">Strategy</a>
-<a href="#institutional-score">Scores</a>
-<a href="#macro-forecast">Macro Forecast</a>
-<a href="#market-pulse">Market Pulse</a>
-<a href="#adaptive-feed">AI Feed</a>
-<a href="#report">Report</a>
-<a href="#company">Company</a>
-<a href="#scenario">Scenario</a>
-<a href="#notifications">Notifications</a>
-<a href="#risk-profile">Risk Profile</a>
-<a href="#api-access">API</a>
-<a href="#autonomous-agent">Agent</a>
-<a href="#global-scanner">Global Scanner</a>
-<a href="#psychology">Psychology</a>
-<a href="#flows">Flows</a>
-<a href="#event-radar">Events</a>
-<a href="#backtesting">Backtest</a>
-<a href="#multi-agent">Multi-Agent</a>
-<a href="#voice">Voice</a>
-<a href="#memory">Memory</a>
-<a href="#enterprise-mode">Enterprise</a>
-<a href="#ai-stream-v2">AI Stream</a>
-<a href="#decision-score">Decision Score</a>
-<a href="#crisis">Crisis</a>
-<a href="#global-sentiment">Global Sentiment</a>
-<a href="#rebalance">Rebalance</a>
-<a href="#watchtower">Watchtower</a>
-<a href="#accuracy">Accuracy</a>
-<a href="#allocation">Allocation</a>
-<a href="#correlation">News Correlation</a>
-<a href="#quantum">Quantum</a>
-<a href="#engine-pages">Engine Pages</a>
-<a href="#lazy-loading">Lazy Load</a>
-<a href="#db-cleanup">DB</a>
-<a href="#auth-system">Auth</a>
-<a href="#payment-access">Payments</a>
-<a href="#roles">Roles</a>
-<a href="#data-providers">Data</a>
-<a href="#signal-checker">Checker</a>
-<a href="#external-alerts">External Alerts</a>
-<a href="#security">Security</a>
-<a href="#microservices">Microservices</a>
-<a href="#cache">Cache</a>
-<a href="#realtime">Realtime</a>
-<a href="#charts">Charts</a>
-<a href="#explainability">Explainability</a>
-<a href="#training">Training</a>
-<a href="#warehouse">Warehouse</a>
-<a href="#api-keys">API Keys</a>
-<a href="#backup">Backup</a>
-<a href="#scaling">Scaling</a>
-<a href="#frontend-backend">Frontend</a>
-<a href="#migrations">Migrations</a>
-<a href="#workers">Workers</a>
-<a href="#queue">Queue</a>
-<a href="#sessions">Sessions</a>
-<a href="#audit">Audit</a>
-<a href="#errors">Errors</a>
-<a href="#tests">Tests</a>
-<a href="#cicd">CI/CD</a>
-<a href="#demo-mode">Demo</a>
-<a href="#watchlist">Watchlist</a>
-<a href="#performance">Performance</a>
 <a href="/hdi/methodology">Methodology</a>
 </div>
 <div class="card">
@@ -3816,35 +3755,35 @@ def dashboard():
 {brief}
 <div class="card" id="live">
 <div class="institution">Real-Time Intelligence Stream</div>
-<h2>ð¡ Live HDI Intelligence Feed</h2>
+<h2>Live HDI Intelligence Feed</h2>
 <span class="live-badge">LIVE MODE</span>
 <p class="blue">HDI streams market pulse, signal movement, sector pressure, economy mood, and news sentiment.</p>
 <div class="stream">{live_stream}</div>
 </div>
 <div class="card" id="alerts">
 <div class="institution">Smart Alerts System</div>
-<h2>ð¨ HDI Smart Alerts</h2>
+<h2>HDI Smart Alerts</h2>
 <p class="blue">HDI alerts you when signals, portfolio risk, sectors, macro conditions, or news sentiment require attention.</p>
 <div class="grid">{smart_alerts}</div>
 </div>
 
 <div class="card" id="heatmap">
 <div class="institution">Institutional Heatmap</div>
-<h2>ð§­ HDI Market Heatmap</h2>
+<h2>HDI Market Heatmap</h2>
 <p class="blue">Visual map of stock strength, sector opportunity, and economy pressure.</p>
 {heatmap}
 </div>
 
 <div class="card" id="behavior">
 <div class="institution">Behavioral Intelligence Engine</div>
-<h2>ð§¬ HDI User Behavior Intelligence</h2>
+<h2>HDI User Behavior Intelligence</h2>
 <p class="blue">HDI learns your focus, decision style, activity level, and risk appetite over time.</p>
 {behavioral}
 </div>
 
 <div class="card" id="portfolio">
 <div class="institution">Portfolio Intelligence Layer</div>
-<h2>ð¼ Personal Portfolio Intelligence</h2>
+<h2>Personal Portfolio Intelligence</h2>
 <p class="blue">HDI analyzes your holdings, exposure, risk, strongest and weakest positions.</p>
 <form action="/hdi/add-portfolio" method="POST">
 <input type="hidden" name="key" value="{key}">
@@ -3854,77 +3793,77 @@ def dashboard():
 </form>
 {portfolio}
 </div>
-<div class="card" id="economy"><div class="institution">Economy Intelligence Layer</div><h2>ð Global Economy Intelligence</h2><div class="grid">{economies}</div></div>
-<div class="card" id="sectors"><div class="institution">Sector Intelligence Layer</div><h2>ð Global Sector Intelligence</h2><div class="grid">{sectors}</div></div>
-<div class="card" id="news"><div class="institution">News Intelligence Layer</div><h2>ð° Market News Intelligence</h2><div class="grid">{news}</div></div>
-<div class="card" id="signals"><div class="institution">Live Signal Ranking</div><h2>ð¥ Top Ranked Signals</h2><div class="grid">{ranked_signals}</div></div>
+<div class="card" id="economy"><div class="institution">Economy Intelligence Layer</div><h2>Global Economy Intelligence</h2><div class="grid">{economies}</div></div>
+<div class="card" id="sectors"><div class="institution">Sector Intelligence Layer</div><h2>Global Sector Intelligence</h2><div class="grid">{sectors}</div></div>
+<div class="card" id="news"><div class="institution">News Intelligence Layer</div><h2>Market News Intelligence</h2><div class="grid">{news}</div></div>
+<div class="card" id="signals"><div class="institution">Live Signal Ranking</div><h2>Top Ranked Signals</h2><div class="grid">{ranked_signals}</div></div>
 
 <div class="card" id="predictions">
 <div class="institution">AI Prediction Engine V2</div>
-<h2>ð® HDI Prediction Intelligence</h2>
+<h2>HDI Prediction Intelligence</h2>
 <p class="blue">HDI estimates bullish/bearish pressure, probability, and momentum acceleration.</p>
 <div class="grid">{predictions}</div>
 </div>
 
 <div class="card" id="briefing">
 <div class="institution">AI Briefing Engine</div>
-<h2>ð§  HDI Analyst Briefing</h2>
+<h2>HDI Analyst Briefing</h2>
 <p class="blue">A structured analyst-style briefing: what is happening, why it matters, what to watch, risk, and opportunity.</p>
 {ai_briefing}
 </div>
 
 <div class="card" id="risk">
 <div class="institution">Risk Intelligence Engine</div>
-<h2>ð¡ï¸ HDI Risk Intelligence</h2>
+<h2>ï¸ HDI Risk Intelligence</h2>
 <p class="blue">HDI analyzes asset risk, portfolio pressure, sector weakness, macro risk, and what could go wrong.</p>
 {risk_intelligence}
 </div>
 
 <div class="card" id="opportunity">
 <div class="institution">Opportunity Intelligence Engine</div>
-<h2>ð HDI Opportunity Intelligence</h2>
+<h2>HDI Opportunity Intelligence</h2>
 <p class="blue">HDI identifies asset opportunities, sector strength, economy opportunity zones, and confirmation needed.</p>
 {opportunity_intelligence}
 </div>
 
 <div class="card" id="strategy">
 <div class="institution">Strategy Recommendation Engine</div>
-<h2>âï¸ HDI Strategy Recommendation</h2>
+<h2>ï¸ HDI Strategy Recommendation</h2>
 <p class="blue">HDI combines risk, opportunity, prediction, portfolio, sector, and macro context into a strategy mode.</p>
 {strategy_recommendation}
 </div>
 
 <div class="card" id="institutional-score">
 <div class="institution">Institutional Scoring Engine</div>
-<h2>ðï¸ HDI Institutional Signal Scores</h2>
+<h2>ï¸ HDI Institutional Signal Scores</h2>
 <p class="blue">HDI grades assets by institutional confidence, signal quality, momentum, trend, and volatility quality.</p>
 <div class="grid">{institutional_scores}</div>
 </div>
 
 <div class="card" id="macro-forecast">
 <div class="institution">AI Macro Forecast Engine</div>
-<h2>ð HDI Macro Forecast</h2>
+<h2>HDI Macro Forecast</h2>
 <p class="blue">HDI estimates macro stability, inflation pressure, economy risk, and opportunity quality.</p>
 <div class="grid">{macro_forecast}</div>
 </div>
 
 <div class="card" id="market-pulse">
 <div class="institution">Dynamic Market Pulse</div>
-<h2>ð HDI Live Market Pulse</h2>
+<h2>HDI Live Market Pulse</h2>
 <p class="blue">HDI summarizes bullish/bearish dominance, average score, and volatility pulse.</p>
 {market_pulse}
 </div>
 
 <div class="card" id="adaptive-feed">
 <div class="institution">Adaptive Recommendation Feed</div>
-<h2>ð§  Personalized HDI Recommendations</h2>
+<h2>Personalized HDI Recommendations</h2>
 <p class="blue">HDI adapts recommendations based on your behavior, portfolio activity, and signal quality.</p>
 <div class="grid">{adaptive_feed}</div>
 </div>
 
 <div class="card" id="report">
 <div class="institution">AI Report Generator</div>
-<h2>ð HDI AI Intelligence Report</h2>
+<h2>HDI AI Intelligence Report</h2>
 <p class="blue">Generate a professional market, portfolio, risk, and opportunity report.</p>
 <a class="btn" href="/hdi/report?key={key}">Open Full Report</a>
 <a class="btn" href="/hdi/report-pdf?key={key}">PDF / Print View</a>
@@ -3933,14 +3872,14 @@ def dashboard():
 
 <div class="card" id="company">
 <div class="institution">Company Intelligence Layer</div>
-<h2>ð¢ Company Intelligence</h2>
+<h2>Company Intelligence</h2>
 <p class="blue">HDI profiles each company by sector, score, pattern, business quality, risk, and opportunity.</p>
 <div class="grid">{company_layer}</div>
 </div>
 
 <div class="card" id="scenario">
 <div class="institution">Portfolio Scenario Simulator</div>
-<h2>ð§ª Portfolio Scenario Simulator</h2>
+<h2>Portfolio Scenario Simulator</h2>
 <p class="blue">Test what happens if you add a new holding before committing it to your portfolio.</p>
 <form action="/hdi/scenario" method="GET">
 <input type="hidden" name="key" value="{key}">
@@ -3953,180 +3892,180 @@ def dashboard():
 
 <div class="card" id="notifications">
 <div class="institution">Smart Notification Center</div>
-<h2>ð HDI Notification Center</h2>
+<h2>HDI Notification Center</h2>
 <p class="blue">All alerts, risk updates, portfolio messages, sector pulses, and news updates in one place.</p>
 <div class="grid">{notifications}</div>
 </div>
 
 <div class="card" id="risk-profile">
 <div class="institution">User Risk Profile Setup</div>
-<h2>ðï¸ Risk Profile</h2>
+<h2>ï¸ Risk Profile</h2>
 <p class="blue">Choose how HDI should adapt strategy recommendations to your style.</p>
 {risk_profile_ui}
 </div>
 
 <div class="card">
 <div class="institution">Institutional Landing Page</div>
-<h2>ð HDI for Institutions</h2>
+<h2>HDI for Institutions</h2>
 <p class="blue">A decision intelligence platform for investors, banks, companies, and governments.</p>
 <a class="btn" href="/hdi/institutional">Open Institutional Page</a>
 </div>
 
 <div class="card" id="api-access">
 <div class="institution">API Access Layer</div>
-<h2>ð HDI API Access</h2>
+<h2>HDI API Access</h2>
 <p class="blue">Developer and enterprise-ready endpoints for integrations.</p>
 {api_access}
 </div>
 
 <div class="card">
 <div class="institution">Mobile-Ready UI Upgrade</div>
-<h2>ð± Mobile Optimized</h2>
+<h2>Mobile Optimized</h2>
 <p class="blue">HDI layout uses responsive cards, adaptive grids, and phone-friendly navigation for mobile usage.</p>
 </div>
 
 <div class="card" id="autonomous-agent">
 <div class="institution">AI Autonomous Intelligence Agent</div>
-<h2>ð¤ HDI Autonomous Agent</h2>
+<h2>HDI Autonomous Agent</h2>
 <p class="blue">HDI monitors signals, sectors, economy mood, risk, and opportunity to produce automatic conclusions.</p>
 {autonomous_agent}
 </div>
 
 <div class="card" id="global-scanner">
 <div class="institution">Global Market Scanner</div>
-<h2>ð HDI Global Scanner</h2>
+<h2>HDI Global Scanner</h2>
 <p class="blue">HDI scans US, Europe, Asia, Crypto, Commodities, and Forex intelligence zones.</p>
 <div class="grid">{global_scanner}</div>
 </div>
 
 <div class="card" id="psychology">
 <div class="institution">AI Trading Psychology Engine</div>
-<h2>ð§  Market Psychology</h2>
+<h2>Market Psychology</h2>
 <p class="blue">HDI estimates fear, greed, panic, overconfidence, and emotion pressure.</p>
 {psychology_engine}
 </div>
 
 <div class="card" id="flows">
 <div class="institution">Institutional Flow Tracker</div>
-<h2>ð¦ Smart Money Flow Estimate</h2>
+<h2>Smart Money Flow Estimate</h2>
 <p class="blue">HDI estimates where institutional attention and capital rotation may be forming.</p>
 <div class="grid">{flow_tracker}</div>
 </div>
 
 <div class="card" id="event-radar">
 <div class="institution">Economic Event Radar</div>
-<h2>ð¡ Macro Event Radar</h2>
+<h2>Macro Event Radar</h2>
 <p class="blue">HDI tracks high-impact economic events, inflation shocks, rate decisions, and earnings pressure.</p>
 <div class="grid">{event_radar}</div>
 </div>
 
 <div class="card" id="backtesting">
 <div class="institution">AI Strategy Backtesting Engine</div>
-<h2>ð§ª Strategy Backtesting</h2>
+<h2>Strategy Backtesting</h2>
 <p class="blue">HDI simulates strategy strength against prototype historical-style conditions.</p>
 <div class="grid">{backtesting_engine}</div>
 </div>
 
 <div class="card" id="multi-agent">
 <div class="institution">Multi-Agent AI System</div>
-<h2>ð§¬ HDI Multi-Agent Intelligence</h2>
+<h2>HDI Multi-Agent Intelligence</h2>
 <p class="blue">Risk, Opportunity, Macro, Strategy, and News agents analyze the market from different angles.</p>
 <div class="grid">{multi_agent_system}</div>
 </div>
 
 <div class="card" id="voice">
 <div class="institution">Voice Intelligence Assistant</div>
-<h2>ðï¸ HDI Voice Assistant</h2>
+<h2>ï¸ HDI Voice Assistant</h2>
 <p class="blue">Prototype layer for voice-style questions and AI analyst answers.</p>
 {voice_assistant}
 </div>
 
 <div class="card" id="memory">
 <div class="institution">HDI Intelligence Memory Engine</div>
-<h2>ð§  Intelligence Memory</h2>
+<h2>Intelligence Memory</h2>
 <p class="blue">HDI tracks signals, behavior, portfolio actions, and learning depth over time.</p>
 {memory_engine}
 </div>
 
 <div class="card" id="enterprise-mode">
 <div class="institution">Enterprise / Hedge Fund Mode</div>
-<h2>ðï¸ HDI Enterprise Mode</h2>
+<h2>ï¸ HDI Enterprise Mode</h2>
 <p class="blue">Professional institutional layer for advanced analytics, multi-screen workflows, and enterprise access.</p>
 {enterprise_mode}
 </div>
 
 <div class="card" id="ai-stream-v2">
 <div class="institution">Real-Time AI Intelligence Stream</div>
-<h2>ð¡ HDI AI Stream V2</h2>
+<h2>HDI AI Stream V2</h2>
 <p class="blue">Live-style stream of signals, macro shifts, sentiment pressure, risk movement, and sector activity.</p>
 <div class="stream">{ai_stream_v2}</div>
 </div>
 
 <div class="card" id="decision-score">
 <div class="institution">AI Decision Score Engine</div>
-<h2>ð¯ HDI Master Decision Score</h2>
+<h2>HDI Master Decision Score</h2>
 <p class="blue">Single master decision score combining risk, opportunity, macro, psychology, momentum, and institutional flow.</p>
 {decision_score}
 </div>
 
 <div class="card" id="crisis">
 <div class="institution">Predictive Crisis Detection System</div>
-<h2>â ï¸ HDI Crisis Detection</h2>
+<h2>ï¸ HDI Crisis Detection</h2>
 <p class="blue">Detects panic zones, liquidity stress, abnormal volatility, weak signal clusters, and crash pressure.</p>
 {crisis_detection}
 </div>
 
 <div class="card" id="global-sentiment">
 <div class="institution">Global Sentiment Heatmap</div>
-<h2>ð Global Sentiment Map</h2>
+<h2>Global Sentiment Map</h2>
 <p class="blue">Regional view of bullish pressure, fear zones, opportunity regions, and macro pressure.</p>
 {global_sentiment}
 </div>
 
 <div class="card" id="rebalance">
 <div class="institution">AI Portfolio Rebalancing Engine</div>
-<h2>âï¸ Portfolio Rebalancing</h2>
+<h2>ï¸ Portfolio Rebalancing</h2>
 <p class="blue">HDI suggests reduce, hold, increase, rotate, or monitor based on portfolio and signal quality.</p>
 {rebalancing_engine}
 </div>
 
 <div class="card" id="watchtower">
 <div class="institution">Institutional Watchtower Mode</div>
-<h2>ð¼ HDI Watchtower</h2>
+<h2>HDI Watchtower</h2>
 <p class="blue">Command-center view for executive monitoring, strategic alerts, and multi-feed intelligence.</p>
 {watchtower_mode}
 </div>
 
 <div class="card" id="accuracy">
 <div class="institution">HDI Accuracy Tracking Engine</div>
-<h2>ð Accuracy Tracking</h2>
+<h2>Accuracy Tracking</h2>
 <p class="blue">Tracks signal history, resolved outcomes, success rate, and learning status.</p>
 {accuracy_tracking}
 </div>
 
 <div class="card" id="allocation">
 <div class="institution">AI Capital Allocation Engine</div>
-<h2>ð° Capital Allocation</h2>
+<h2>Capital Allocation</h2>
 <p class="blue">Prototype risk-adjusted allocation distribution based on signal quality and volatility.</p>
 <div class="grid">{capital_allocation}</div>
 </div>
 
 <div class="card" id="correlation">
 <div class="institution">Global News Correlation Engine</div>
-<h2>ð° News Correlation</h2>
+<h2>News Correlation</h2>
 <p class="blue">HDI correlates news, sentiment, sectors, macro context, and asset movement.</p>
 <div class="grid">{news_correlation}</div>
 </div>
 
 <div class="card" id="quantum">
 <div class="institution">HDI Quantum Intelligence Concept Layer</div>
-<h2>ð§¿ Quantum Scenario Intelligence</h2>
+<h2>Quantum Scenario Intelligence</h2>
 <p class="blue">Future-style multi-scenario projections, probability branches, and strategic future mapping.</p>
 {quantum_layer}
 </div>
 <div class="card">
 <div class="institution">Next Level AI Layer</div>
-<h2>ð§  Multi-Factor Signal Engine</h2>
+<h2>Multi-Factor Signal Engine</h2>
 <p class="blue">{signal["adaptive_note"]}</p>
 <div class="grid">
 <div class="box"><b>Priority Symbol</b><br>{signal["symbol"]}</div>
@@ -4136,7 +4075,7 @@ def dashboard():
 <div class="box"><b>HDI Recommendation</b><br>{signal["recommendation"]}</div>
 <div class="box"><b>Micro Result</b><br>{signal["micro_result"]}</div>
 </div></div>
-<div class="card"><div class="institution">Feedback Loop</div><h2>ð Closed Learning System</h2>{accuracy}</div>
+<div class="card"><div class="institution">Feedback Loop</div><h2>Closed Learning System</h2>{accuracy}</div>
 <div class="card">
 <div class="institution">Adaptive Insight Feed</div>
 <h2>Market Intelligence Pulse</h2>
@@ -4149,210 +4088,210 @@ def dashboard():
 
 <div class="card" id="engine-pages">
 <div class="institution">Separate Pages Per Engine</div>
-<h2>ð§­ Engine Pages</h2>
+<h2>Engine Pages</h2>
 <p class="blue">HDI modules can now open as separate pages so the main dashboard does not carry everything at once.</p>
 {engine_pages}
 </div>
 
 <div class="card" id="lazy-loading">
 <div class="institution">Lazy Loading Layer</div>
-<h2>â¡ Lazy Loading</h2>
+<h2>Lazy Loading</h2>
 <p class="blue">Prepared routes for loading heavy intelligence sections separately.</p>
 {lazy_loading}
 </div>
 
 <div class="card" id="db-cleanup">
 <div class="institution">Real Database Cleanup</div>
-<h2>ðï¸ Database Health</h2>
+<h2>ï¸ Database Health</h2>
 <p class="blue">Indexes, table counts, and operational health layer for production readiness.</p>
 {db_cleanup}
 </div>
 
 <div class="card" id="auth-system">
 <div class="institution">Real Authentication</div>
-<h2>ð Secure Login System</h2>
+<h2>Secure Login System</h2>
 <p class="blue">Password hashing and session support while keeping existing email/API-key access safe.</p>
 {auth_system}
 </div>
 
 <div class="card" id="payment-access">
 <div class="institution">Payment Access System</div>
-<h2>ð³ Premium Access Flow</h2>
+<h2>Premium Access Flow</h2>
 <p class="blue">Prepared access/payment flow for Flutterwave, PayPal, or manual institutional approval.</p>
 {payment_access}
 </div>
 
 <div class="card" id="roles">
 <div class="institution">Role-Based Admin</div>
-<h2>ð¡ï¸ Roles & Permissions</h2>
+<h2>ï¸ Roles & Permissions</h2>
 <p class="blue">Foundation for admin, analyst, user, and institution roles.</p>
 {role_admin}
 </div>
 
 <div class="card" id="data-providers">
 <div class="institution">Real Data Provider Expansion</div>
-<h2>ð Expanded Asset Universe</h2>
+<h2>Expanded Asset Universe</h2>
 <p class="blue">Stocks, crypto, forex, commodities, and indexes are prepared for larger data providers.</p>
 {data_providers}
 </div>
 
 <div class="card" id="signal-checker">
 <div class="institution">Background Signal Checker</div>
-<h2>ð Signal Outcome Checker</h2>
+<h2>Signal Outcome Checker</h2>
 <p class="blue">Prototype route to check pending signals and update success/failure status.</p>
 {signal_checker_ui}
 </div>
 
 <div class="card" id="external-alerts">
 <div class="institution">Email / WhatsApp Alerts</div>
-<h2>ð² External Alert Contacts</h2>
+<h2>External Alert Contacts</h2>
 <p class="blue">Save destinations for future email, WhatsApp, or SMS alerts.</p>
 {external_alerts}
 </div>
 
 <div class="card" id="security">
 <div class="institution">Production Security Hardening</div>
-<h2>ð Security Readiness</h2>
+<h2>Security Readiness</h2>
 <p class="blue">Security headers, validation, logs, and rate-limit preparation.</p>
 {production_security}
 </div>
 
 <div class="card" id="microservices">
 <div class="institution">Microservice Architecture</div>
-<h2>ð§± HDI Modular Services</h2>
+<h2>HDI Modular Services</h2>
 <p class="blue">HDI is prepared to split into signals, portfolio, news, AI, and notification services.</p>
 <div class="grid">{microservices}</div>
 </div>
 
 <div class="card" id="cache">
 <div class="institution">Caching Layer</div>
-<h2>â¡ Redis / Cache Readiness</h2>
+<h2>Redis / Cache Readiness</h2>
 <p class="blue">Prepared for Redis caching to make live dashboards faster and reduce API load.</p>
 {cache_layer}
 </div>
 
 <div class="card" id="realtime">
 <div class="institution">Realtime WebSocket System</div>
-<h2>ð´ Realtime Intelligence</h2>
+<h2>Realtime Intelligence</h2>
 <p class="blue">SSE-ready live updates now; future WebSocket architecture prepared.</p>
 {realtime_system}
 </div>
 
 <div class="card" id="charts">
 <div class="institution">Advanced Charts Engine</div>
-<h2>ð Institutional Charts</h2>
+<h2>Institutional Charts</h2>
 <p class="blue">Prototype advanced charts for signal strength, flows, volatility, and future macro overlays.</p>
 {advanced_charts}
 </div>
 
 <div class="card" id="explainability">
 <div class="institution">AI Explainability Layer</div>
-<h2>ð§  Why HDI Thinks This</h2>
+<h2>Why HDI Thinks This</h2>
 <p class="blue">HDI explains why a signal, recommendation, or score was generated.</p>
 {explainability_layer}
 </div>
 
 <div class="card" id="training">
 <div class="institution">Model Training Pipeline</div>
-<h2>ðï¸ AI Training Pipeline</h2>
+<h2>ï¸ AI Training Pipeline</h2>
 <p class="blue">Prepared for future ML training using signals, outcomes, behavior, macro, and sentiment data.</p>
 {training_pipeline}
 </div>
 
 <div class="card" id="warehouse">
 <div class="institution">Historical Data Warehouse</div>
-<h2>ðï¸ HDI Data Warehouse</h2>
+<h2>ï¸ HDI Data Warehouse</h2>
 <p class="blue">Structured foundation for long-term signal, sentiment, macro, behavior, and outcome history.</p>
 {data_warehouse}
 </div>
 
 <div class="card" id="api-keys">
 <div class="institution">Institutional API Keys Management</div>
-<h2>ð Enterprise API Keys</h2>
+<h2>Enterprise API Keys</h2>
 <p class="blue">Create and revoke institutional API keys for future enterprise integrations.</p>
 {api_keys_management}
 </div>
 
 <div class="card" id="backup">
 <div class="institution">Disaster Recovery & Backup</div>
-<h2>ð Backup & Recovery</h2>
+<h2>Backup & Recovery</h2>
 <p class="blue">Prepared backup and restore strategy for code, database, environment, and deployment recovery.</p>
 {backup_system}
 </div>
 
 <div class="card" id="scaling">
 <div class="institution">Deployment Scaling Infrastructure</div>
-<h2>ð Scaling Infrastructure</h2>
+<h2>Scaling Infrastructure</h2>
 <p class="blue">Prepared for Docker, Gunicorn, Nginx, Render/Railway scaling, and cloud architecture.</p>
 {scaling_infra}
 </div>
 
 <div class="card" id="frontend-backend">
 <div class="institution">Separate Frontend / Backend</div>
-<h2>ð§© Flask API + React Ready</h2>
+<h2>Flask API + React Ready</h2>
 <p class="blue">HDI is prepared to keep Flask as backend API and move UI to React/Next.js later.</p>
 {frontend_backend}
 </div>
 
 <div class="card" id="migrations">
 <div class="institution">Professional Database Migrations</div>
-<h2>ðï¸ Migration Roadmap</h2>
+<h2>ï¸ Migration Roadmap</h2>
 <p class="blue">Prepare HDI for Alembic/Flask-Migrate.</p>
 {migrations}
 </div>
 
 <div class="card" id="workers">
 <div class="institution">Background Workers</div>
-<h2>âï¸ Worker Architecture</h2>
+<h2>ï¸ Worker Architecture</h2>
 <p class="blue">Signal checks, alerts, reports, news refresh, and portfolio calculations can run outside requests.</p>
 <div class="grid">{background_workers}</div>
 </div>
 
 <div class="card" id="queue">
 <div class="institution">Queue System</div>
-<h2>ð¥ Celery / Redis Queue</h2>
+<h2>Celery / Redis Queue</h2>
 <p class="blue">Prepared for heavy jobs and background intelligence workflows.</p>
 {queue_system}
 </div>
 
 <div class="card" id="sessions">
 <div class="institution">Real User Sessions</div>
-<h2>ð Secure Sessions</h2>
+<h2>Secure Sessions</h2>
 <p class="blue">Move from API-key dashboard access to secure cookie sessions.</p>
 {user_sessions}
 </div>
 
 <div class="card" id="audit">
 <div class="institution">Audit Logs</div>
-<h2>ð§¾ Audit Trail</h2>
+<h2>Audit Trail</h2>
 <p class="blue">Track admin and user actions.</p>
 {audit_logs_ui}
 </div>
 
 <div class="card" id="errors">
 <div class="institution">Error Monitoring</div>
-<h2>ð ï¸ Error Monitoring</h2>
+<h2>ï¸ Error Monitoring</h2>
 <p class="blue">Prepare crash, DB error, API failure, and slow-route monitoring.</p>
 {error_monitoring}
 </div>
 
 <div class="card" id="tests">
 <div class="institution">Testing Suite</div>
-<h2>ð§ª Testing Roadmap</h2>
+<h2>Testing Roadmap</h2>
 <p class="blue">Prepare route, DB, auth, signal, admin, and portfolio tests.</p>
 <div class="grid">{testing_suite}</div>
 </div>
 
 <div class="card" id="cicd">
 <div class="institution">CI/CD Pipeline</div>
-<h2>ð¦ CI/CD Readiness</h2>
+<h2>CI/CD Readiness</h2>
 <p class="blue">Prepare auto test + deploy workflow after every push.</p>
 {cicd_pipeline}
 </div>
 
 <div class="card" id="demo-mode">
 <div class="institution">Investor Demo Mode</div>
-<h2>ð¬ Investor Demo</h2>
+<h2>Investor Demo</h2>
 <p class="blue">Clean demo experience with impressive sample intelligence and no real user data exposure.</p>
 {investor_demo}
 </div>
@@ -4366,7 +4305,7 @@ def dashboard():
 </form>
 <div class="grid">{watchlist}</div>
 </div>
-<div class="card" id="performance"><h2>ð HDI Performance Layer</h2>{performance}</div>
+<div class="card" id="performance"><h2>HDI Performance Layer</h2>{performance}</div>
 <a href="/" class="muted">Logout</a>
 </div></body></html>
 """
@@ -4895,7 +4834,7 @@ def methodology():
 <p>HDI analyzes market movement, news sentiment, sector intelligence, economy intelligence, portfolio exposure, user behavior, and feedback outcomes.</p>
 </div>
 <div class="card">
-<h2>â ï¸ Risk Disclaimer</h2>
+<h2>ï¸ Risk Disclaimer</h2>
 <p>HDI provides decision intelligence based on data patterns. It is not financial advice or a guarantee of profit.</p>
 </div>
 <a href="/" class="muted">Back Home</a>
@@ -4935,8 +4874,8 @@ def premium():
 </div>
 <a class="pay" href="/hdi/request-access?key={key}">Request Institutional Access</a>
 </div>
-<div class="card"><h2>ð Feedback Accuracy</h2>{accuracy}</div>
-<div class="card"><h2>ð Performance Preview</h2>{performance}</div>
+<div class="card"><h2>Feedback Accuracy</h2>{accuracy}</div>
+<div class="card"><h2>Performance Preview</h2>{performance}</div>
 <a href="/hdi/dashboard?key={key}" class="muted">Back to Dashboard</a>
 </div></body></html>
 """
